@@ -1,15 +1,10 @@
 {
-  "title": "演示",
+  "title": "\u6f14\u793a",
   "elementPlus": "Element Plus",
-  "form": "表单演示",
+  "form": "\u8868\u5355\u6f14\u793a",
   "vben": {
-    "title": "项目",
-    "about": "关于",
-    "document": "文档",
-    "antdv": "Ant Design Vue 版本",
-    "antdv-next": "Antdv Next 版本",
-    "naive-ui": "Naive UI 版本",
-    "element-plus": "Element Plus 版本",
-    "tdesign": "TDesign Vue 版本"
+    "title": "\u9879\u76ee",
+    "about": "\u5173\u4e8e",
+    "document": "\u6587\u6863"
   }
 }
