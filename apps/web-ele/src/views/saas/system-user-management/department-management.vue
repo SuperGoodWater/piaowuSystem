@@ -11,7 +11,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新增部门',
@@ -55,22 +55,6 @@ const meta = {
       permissionPoints: ['编辑'],
     },
   ],
-  columns: [
-    { key: 'departmentName', label: '部门名称' },
-    { key: 'parentDepartment', label: '上级部门' },
-    { key: 'manager', label: '负责人' },
-    { key: 'employeeCount', label: '员工数' },
-    { key: 'status', label: '状态' },
-  ],
-  description: '维护 SaaS 平台内部组织结构与归属关系。',
-  documentNotes: ['部门管理页用于维护组织归属关系，支撑员工账号的部门选择。'],
-  exceptions: ['部门禁用后需同步限制组织归属选择。'],
-  fields: [
-    { label: '部门名称', note: '组织名称', required: true },
-    { label: '上级部门', note: '用于组织归属结构' },
-    { label: '负责人', note: '部门负责人', required: true },
-    { label: '状态', note: '启用 / 禁用', required: true },
-  ],
   filters: [
     createTextFilter({ field: 'departmentName', label: '部门名称' }),
     createTextFilter({ field: 'manager', label: '负责人' }),
@@ -80,13 +64,12 @@ const meta = {
       options: enabledDisabledOptions,
     }),
   ],
-  pageGoal: '维护部门信息并支持新增、编辑、禁用。',
-  permissionPoints: ['查看', '新增', '编辑', '禁用'],
-  processSteps: [
-    '进入部门管理页。',
-    '新增部门。',
-    '编辑部门。',
-    '按需禁用部门。',
+  columns: [
+    { key: 'departmentName', label: '部门名称' },
+    { key: 'parentDepartment', label: '上级部门' },
+    { key: 'manager', label: '负责人' },
+    { key: 'employeeCount', label: '员工数' },
+    { key: 'status', label: '状态' },
   ],
   rowActions: [
     {
@@ -147,6 +130,31 @@ const meta = {
       permissionPoints: ['新增', '编辑'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '维护部门信息并支持新增、编辑、禁用。',
+  description: '维护 SaaS 平台内部组织结构与归属关系。',
+  documentNotes: ['部门管理页用于维护组织归属关系，支撑员工账号的部门选择。'],
+  fields: [
+    { label: '部门名称', note: '组织名称', required: true },
+    { label: '上级部门', note: '用于组织归属结构' },
+    { label: '负责人', note: '部门负责人', required: true },
+    { label: '状态', note: '启用 / 禁用', required: true },
+  ],
+  processSteps: [
+    '进入部门管理页。',
+    '新增部门。',
+    '编辑部门。',
+    '按需禁用部门。',
+  ],
+  permissionPoints: ['查看', '新增', '编辑', '禁用'],
+  exceptions: ['部门禁用后需同步限制组织归属选择。'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

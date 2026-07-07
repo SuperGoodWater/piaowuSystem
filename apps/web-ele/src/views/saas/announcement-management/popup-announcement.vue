@@ -9,7 +9,7 @@ import {
 import { popupStatusOptions, popupTargetOptions } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建弹窗公告',
@@ -55,16 +55,6 @@ const meta = {
       permissionPoints: ['发布'],
     },
   ],
-  columns: [
-    { key: 'title', label: '公告标题' },
-    { key: 'effectiveWindow', label: '生效时间段' },
-    { key: 'target', label: '目标对象' },
-    { key: 'status', label: '状态' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理弹窗公告，控制唯一生效规则与下线操作。',
-  documentNotes: ['同一时间仅允许一个弹窗公告生效。'],
-  exceptions: ['同一时间仅允许一个弹窗公告生效。'],
   filters: [
     createTextFilter({ field: 'title', label: '公告标题' }),
     createSelectFilter({
@@ -78,13 +68,12 @@ const meta = {
       options: popupStatusOptions,
     }),
   ],
-  pageGoal: '管理弹窗公告。',
-  permissionPoints: ['查看', '新建', '编辑', '发布', '下线'],
-  processSteps: [
-    '进入弹窗公告页。',
-    '新建或编辑弹窗公告。',
-    '必要时替换当前生效公告。',
-    '按需下线公告。',
+  columns: [
+    { key: 'title', label: '公告标题' },
+    { key: 'effectiveWindow', label: '生效时间段' },
+    { key: 'target', label: '目标对象' },
+    { key: 'status', label: '状态' },
+    { key: 'updatedAt', label: '更新时间' },
   ],
   rowActions: [
     {
@@ -154,6 +143,25 @@ const meta = {
       permissionPoints: ['新建', '编辑', '发布', '下线'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '管理弹窗公告。',
+  description: '管理弹窗公告，控制唯一生效规则与下线操作。',
+  documentNotes: ['同一时间仅允许一个弹窗公告生效。'],
+  processSteps: [
+    '进入弹窗公告页。',
+    '新建或编辑弹窗公告。',
+    '必要时替换当前生效公告。',
+    '按需下线公告。',
+  ],
+  permissionPoints: ['查看', '新建', '编辑', '发布', '下线'],
+  exceptions: ['同一时间仅允许一个弹窗公告生效。'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

@@ -9,7 +9,7 @@ import {
 import { auditModuleOptions, auditRiskLevelOptions } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '查看审计规则',
@@ -18,24 +18,6 @@ const meta = {
       goal: '理解审计日志用途与记录范围。',
       permissionPoints: ['查看日志'],
     },
-  ],
-  columns: [
-    { key: 'operator', label: '操作人' },
-    { key: 'module', label: '模块' },
-    { key: 'beforeAfter', label: '变更摘要' },
-    { key: 'riskLevel', label: '风险等级' },
-    { key: 'time', label: '审计时间' },
-  ],
-  description: '记录关键敏感动作的前后变化内容，用于追溯和平台治理。',
-  documentNotes: [
-    '审计日志用于记录关键敏感动作的前后变化内容。',
-    '重点服务于后续问题追溯与平台治理场景。',
-  ],
-  permissionPoints: ['查看日志'],
-  processSteps: [
-    '进入审计日志页。',
-    '按模块和风险等级筛选。',
-    '查看前后变化详情。',
   ],
   filters: [
     createTextFilter({ field: 'operator', label: '操作人' }),
@@ -50,7 +32,13 @@ const meta = {
       options: auditRiskLevelOptions,
     }),
   ],
-  pageGoal: '查看关键审计记录。',
+  columns: [
+    { key: 'operator', label: '操作人' },
+    { key: 'module', label: '模块' },
+    { key: 'beforeAfter', label: '变更摘要' },
+    { key: 'riskLevel', label: '风险等级' },
+    { key: 'time', label: '审计时间' },
+  ],
   rowActions: [
     {
       label: '查看详情',
@@ -101,6 +89,26 @@ const meta = {
       permissionPoints: ['查看日志'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '查看关键审计记录。',
+  description: '记录关键敏感动作的前后变化内容，用于追溯和平台治理。',
+  documentNotes: [
+    '审计日志用于记录关键敏感动作的前后变化内容。',
+    '重点服务于后续问题追溯与平台治理场景。',
+  ],
+  processSteps: [
+    '进入审计日志页。',
+    '按模块和风险等级筛选。',
+    '查看前后变化详情。',
+  ],
+  permissionPoints: ['查看日志'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

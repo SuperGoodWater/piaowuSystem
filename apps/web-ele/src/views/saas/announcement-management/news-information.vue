@@ -8,7 +8,7 @@ import {
 import { newsCategoryOptions, publishStatusOptions } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建资讯',
@@ -60,26 +60,6 @@ const meta = {
       permissionPoints: ['下线'],
     },
   ],
-  columns: [
-    { key: 'title', label: '资讯标题' },
-    { key: 'category', label: '分类' },
-    { key: 'status', label: '发布状态' },
-    { key: 'author', label: '作者' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理资讯内容，支持新建、编辑、发布和下线。',
-  documentNotes: [
-    '新闻资讯页承载平台资讯内容维护。',
-    '支持新建、编辑、发布、下线资讯。',
-  ],
-  fields: [
-    { label: '资讯标题', note: '内容标题', required: true },
-    { label: '分类', note: '如平台动态、运营资讯、产品公告', required: true },
-    { label: '作者', note: '内容发布人', required: true },
-    { label: '发布状态', note: '草稿 / 已发布 / 已下线', required: true },
-  ],
-  permissionPoints: ['查看', '新建', '编辑', '发布', '下线'],
-  processSteps: ['进入新闻资讯页。', '新建或编辑资讯。', '发布或下线资讯。'],
   filters: [
     createTextFilter({ field: 'title', label: '资讯标题' }),
     createSelectFilter({
@@ -94,7 +74,13 @@ const meta = {
       placeholder: '请选择发布状态',
     }),
   ],
-  pageGoal: '管理资讯内容。',
+  columns: [
+    { key: 'title', label: '资讯标题' },
+    { key: 'category', label: '分类' },
+    { key: 'status', label: '发布状态' },
+    { key: 'author', label: '作者' },
+    { key: 'updatedAt', label: '更新时间' },
+  ],
   rowActions: [
     {
       label: '编辑',
@@ -162,6 +148,28 @@ const meta = {
       permissionPoints: ['新建', '编辑', '发布', '下线'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '管理资讯内容。',
+  description: '管理资讯内容，支持新建、编辑、发布和下线。',
+  documentNotes: [
+    '新闻资讯页承载平台资讯内容维护。',
+    '支持新建、编辑、发布、下线资讯。',
+  ],
+  fields: [
+    { label: '资讯标题', note: '内容标题', required: true },
+    { label: '分类', note: '如平台动态、运营资讯、产品公告', required: true },
+    { label: '作者', note: '内容发布人', required: true },
+    { label: '发布状态', note: '草稿 / 已发布 / 已下线', required: true },
+  ],
+  processSteps: ['进入新闻资讯页。', '新建或编辑资讯。', '发布或下线资讯。'],
+  permissionPoints: ['查看', '新建', '编辑', '发布', '下线'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

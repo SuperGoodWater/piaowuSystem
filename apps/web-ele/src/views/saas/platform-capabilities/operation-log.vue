@@ -10,7 +10,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '查看日志说明',
@@ -22,23 +22,6 @@ const meta = {
       goal: '统一理解日志留痕范围。',
       permissionPoints: ['查看日志'],
     },
-  ],
-  columns: [
-    { key: 'operator', label: '操作人' },
-    { key: 'module', label: '所属模块' },
-    { key: 'action', label: '操作动作' },
-    { key: 'target', label: '操作对象' },
-    { key: 'time', label: '操作时间' },
-  ],
-  description: '记录 SaaS 后台操作人、操作时间、操作对象和操作动作。',
-  documentNotes: [
-    '需覆盖租户、门店、版本、权益、联营、应用、资源、公告等关键模块。',
-  ],
-  permissionPoints: ['查看日志'],
-  processSteps: [
-    '进入操作日志页。',
-    '按操作人、模块、动作筛选日志。',
-    '查看具体留痕详情。',
   ],
   filters: [
     createTextFilter({ field: 'operator', label: '操作人' }),
@@ -53,7 +36,13 @@ const meta = {
       options: operationActionOptions,
     }),
   ],
-  pageGoal: '查看平台操作留痕。',
+  columns: [
+    { key: 'operator', label: '操作人' },
+    { key: 'module', label: '所属模块' },
+    { key: 'action', label: '操作动作' },
+    { key: 'target', label: '操作对象' },
+    { key: 'time', label: '操作时间' },
+  ],
   rowActions: [
     {
       label: '查看详情',
@@ -98,6 +87,25 @@ const meta = {
       permissionPoints: ['查看日志'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '查看平台操作留痕。',
+  description: '记录 SaaS 后台操作人、操作时间、操作对象和操作动作。',
+  documentNotes: [
+    '需覆盖租户、门店、版本、权益、联营、应用、资源、公告等关键模块。',
+  ],
+  processSteps: [
+    '进入操作日志页。',
+    '按操作人、模块、动作筛选日志。',
+    '查看具体留痕详情。',
+  ],
+  permissionPoints: ['查看日志'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

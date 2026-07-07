@@ -12,7 +12,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建上新通知',
@@ -58,34 +58,6 @@ const meta = {
       permissionPoints: ['发布'],
     },
   ],
-  columns: [
-    { key: 'title', label: '标题' },
-    { key: 'featureModule', label: '功能模块' },
-    { key: 'targetVersion', label: '目标版本' },
-    { key: 'status', label: '状态' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理功能上新通知，向租户或门店传达新增能力。',
-  documentNotes: [
-    '功能上新页用于向租户或门店同步新增能力。',
-    '支持新建、编辑、发布、下线上新通知。',
-  ],
-  fields: [
-    { label: '标题', note: '上新通知标题', required: true },
-    {
-      label: '功能模块',
-      note: '如会员营销、票务能力、联营能力',
-      required: true,
-    },
-    { label: '目标版本', note: '通知适用的版本范围', required: true },
-    { label: '状态', note: '草稿 / 已发布 / 已下线', required: true },
-  ],
-  permissionPoints: ['查看', '新建', '编辑', '发布', '下线'],
-  processSteps: [
-    '进入功能上新页。',
-    '新建或编辑上新通知。',
-    '发布或下线上新通知。',
-  ],
   filters: [
     createTextFilter({ field: 'title', label: '标题' }),
     createSelectFilter({
@@ -99,7 +71,13 @@ const meta = {
       options: publishStatusOptions,
     }),
   ],
-  pageGoal: '管理功能上新通知。',
+  columns: [
+    { key: 'title', label: '标题' },
+    { key: 'featureModule', label: '功能模块' },
+    { key: 'targetVersion', label: '目标版本' },
+    { key: 'status', label: '状态' },
+    { key: 'updatedAt', label: '更新时间' },
+  ],
   rowActions: [
     {
       label: '编辑',
@@ -168,6 +146,36 @@ const meta = {
       permissionPoints: ['新建', '编辑', '发布', '下线'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '管理功能上新通知。',
+  description: '管理功能上新通知，向租户或门店传达新增能力。',
+  documentNotes: [
+    '功能上新页用于向租户或门店同步新增能力。',
+    '支持新建、编辑、发布、下线上新通知。',
+  ],
+  fields: [
+    { label: '标题', note: '上新通知标题', required: true },
+    {
+      label: '功能模块',
+      note: '如会员营销、票务能力、联营能力',
+      required: true,
+    },
+    { label: '目标版本', note: '通知适用的版本范围', required: true },
+    { label: '状态', note: '草稿 / 已发布 / 已下线', required: true },
+  ],
+  processSteps: [
+    '进入功能上新页。',
+    '新建或编辑上新通知。',
+    '发布或下线上新通知。',
+  ],
+  permissionPoints: ['查看', '新建', '编辑', '发布', '下线'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

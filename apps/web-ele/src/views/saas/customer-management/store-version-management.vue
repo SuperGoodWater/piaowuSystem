@@ -9,7 +9,7 @@ import {
 import { storeTypeOptions, tenantStatusOptions } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建版本',
@@ -61,30 +61,6 @@ const meta = {
       permissionPoints: ['配置'],
     },
   ],
-  columns: [
-    { key: 'versionName', label: '版本名称' },
-    { key: 'storeType', label: '适用门店类型' },
-    { key: 'featureScope', label: '功能边界说明' },
-    { key: 'status', label: '状态' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '维护不同门店类型下的版本能力边界，为门店版本切换提供基础配置。',
-  documentNotes: [
-    '版本配置需基于门店类型进行维护。',
-    '若某门店类型下无可用版本，应明确提示无可选版本。',
-  ],
-  exceptions: [
-    '若门店未创建，不允许配置版本。',
-    '若门店类型下无可用版本，应提示无可选版本。',
-    '版本切换后按新版本边界即时生效。',
-  ],
-  fields: [
-    { label: '适用门店类型', note: '不同类型可配置不同版本', required: true },
-    { label: '版本名称', note: '例如基础版、专业版、旗舰版', required: true },
-    { label: '版本说明', note: '版本简介' },
-    { label: '功能边界说明', note: '版本包含的功能范围说明', required: true },
-    { label: '状态', note: '启用 / 停用', required: true },
-  ],
   filters: [
     createTextFilter({ field: 'versionName', label: '版本名称' }),
     createSelectFilter({
@@ -98,14 +74,12 @@ const meta = {
       options: tenantStatusOptions,
     }),
   ],
-  pageGoal: '维护门店版本并管理版本说明、启停和切换边界。',
-  permissionPoints: ['查看', '配置', '切换版本'],
-  processSteps: [
-    '进入门店详情页。',
-    '选择当前门店所属类型下可用版本。',
-    '保存版本配置。',
-    '版本按新边界即时生效。',
-    '被新版本屏蔽的功能直接不可见或不可用。',
+  columns: [
+    { key: 'versionName', label: '版本名称' },
+    { key: 'storeType', label: '适用门店类型' },
+    { key: 'featureScope', label: '功能边界说明' },
+    { key: 'status', label: '状态' },
+    { key: 'updatedAt', label: '更新时间' },
   ],
   rowActions: [
     {
@@ -143,20 +117,6 @@ const meta = {
       storeType: '游客中心',
       updatedAt: '2026-07-03 09:10',
       versionName: '基础版',
-    },
-  ],
-  statusTransitions: [
-    {
-      current: '启用',
-      note: '手动停用后不可再被配置',
-      target: '停用',
-      trigger: '停用',
-    },
-    {
-      current: '停用',
-      note: '重新开放可配置能力',
-      target: '启用',
-      trigger: '启用',
     },
   ],
   supportActions: [
@@ -208,6 +168,54 @@ const meta = {
       permissionPoints: ['配置', '切换版本'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '维护门店版本并管理版本说明、启停和切换边界。',
+  description: '维护不同门店类型下的版本能力边界，为门店版本切换提供基础配置。',
+  documentNotes: [
+    '版本配置需基于门店类型进行维护。',
+    '若某门店类型下无可用版本，应明确提示无可选版本。',
+  ],
+  fields: [
+    { label: '适用门店类型', note: '不同类型可配置不同版本', required: true },
+    { label: '版本名称', note: '例如基础版、专业版、旗舰版', required: true },
+    { label: '版本说明', note: '版本简介' },
+    { label: '功能边界说明', note: '版本包含的功能范围说明', required: true },
+    { label: '状态', note: '启用 / 停用', required: true },
+  ],
+  processSteps: [
+    '进入门店详情页。',
+    '选择当前门店所属类型下可用版本。',
+    '保存版本配置。',
+    '版本按新边界即时生效。',
+    '被新版本屏蔽的功能直接不可见或不可用。',
+  ],
+  permissionPoints: ['查看', '配置', '切换版本'],
+  exceptions: [
+    '若门店未创建，不允许配置版本。',
+    '若门店类型下无可用版本，应提示无可选版本。',
+    '版本切换后按新版本边界即时生效。',
+  ],
+  statusTransitions: [
+    {
+      current: '启用',
+      note: '手动停用后不可再被配置',
+      target: '停用',
+      trigger: '停用',
+    },
+    {
+      current: '停用',
+      note: '重新开放可配置能力',
+      target: '启用',
+      trigger: '启用',
+    },
+  ],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

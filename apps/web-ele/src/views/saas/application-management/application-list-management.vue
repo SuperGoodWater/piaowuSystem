@@ -9,7 +9,7 @@ import {
 import { appShelfStatusOptions, appTypeOptions } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新增应用',
@@ -63,30 +63,6 @@ const meta = {
       permissionPoints: ['下架'],
     },
   ],
-  columns: [
-    { key: 'appName', label: '应用名称' },
-    { key: 'appType', label: '应用类型' },
-    { key: 'visibility', label: '可见范围' },
-    { key: 'status', label: '上架状态' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理附加应用的上架、下架和可见性，不影响已开通门店的已购能力。',
-  documentNotes: ['应用下架不影响已开通门店，仅关闭开通入口。'],
-  exceptions: ['应用下架不影响已开通门店，仅关闭开通入口。'],
-  fields: [
-    { label: '应用名称', note: '展示名称', required: true },
-    {
-      label: '应用类型',
-      note: '如营销应用、运营应用、数据应用',
-      required: true,
-    },
-    {
-      label: '可见范围',
-      note: '按版本、门店类型或租户范围控制',
-      required: true,
-    },
-    { label: '上架状态', note: '已上架 / 已下架', required: true },
-  ],
   filters: [
     createTextFilter({ field: 'appName', label: '应用名称' }),
     createSelectFilter({
@@ -100,9 +76,13 @@ const meta = {
       options: appShelfStatusOptions,
     }),
   ],
-  pageGoal: '查看并管理附加应用。',
-  permissionPoints: ['查看', '上架', '下架', '设置可见性'],
-  processSteps: ['进入应用列表页。', '上架或下架应用。', '设置应用可见性。'],
+  columns: [
+    { key: 'appName', label: '应用名称' },
+    { key: 'appType', label: '应用类型' },
+    { key: 'visibility', label: '可见范围' },
+    { key: 'status', label: '上架状态' },
+    { key: 'updatedAt', label: '更新时间' },
+  ],
   rowActions: [
     {
       label: '编辑',
@@ -163,6 +143,34 @@ const meta = {
       permissionPoints: ['设置可见性'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '查看并管理附加应用。',
+  description: '管理附加应用的上架、下架和可见性，不影响已开通门店的已购能力。',
+  documentNotes: ['应用下架不影响已开通门店，仅关闭开通入口。'],
+  fields: [
+    { label: '应用名称', note: '展示名称', required: true },
+    {
+      label: '应用类型',
+      note: '如营销应用、运营应用、数据应用',
+      required: true,
+    },
+    {
+      label: '可见范围',
+      note: '按版本、门店类型或租户范围控制',
+      required: true,
+    },
+    { label: '上架状态', note: '已上架 / 已下架', required: true },
+  ],
+  processSteps: ['进入应用列表页。', '上架或下架应用。', '设置应用可见性。'],
+  permissionPoints: ['查看', '上架', '下架', '设置可见性'],
+  exceptions: ['应用下架不影响已开通门店，仅关闭开通入口。'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

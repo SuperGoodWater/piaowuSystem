@@ -12,7 +12,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建通知',
@@ -62,22 +62,6 @@ const meta = {
       permissionPoints: ['查看通知'],
     },
   ],
-  columns: [
-    { key: 'title', label: '通知标题' },
-    { key: 'channel', label: '通知方式' },
-    { key: 'target', label: '通知对象' },
-    { key: 'status', label: '发送状态' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理站内信、短信、邮件等通知触达配置和消息查看。',
-  documentNotes: [
-    '文档已明确通知对象为租户管理员、门店管理员。',
-    '通知方式包括站内信、短信、邮件，具体触发场景后续可继续补充。',
-  ],
-  exceptions: [
-    '消息通知的具体触发场景和文案范围后续仍可继续补充。',
-    '当前文档未要求报表下载或打印能力。',
-  ],
   filters: [
     createTextFilter({ field: 'title', label: '通知标题' }),
     createSelectFilter({
@@ -91,17 +75,12 @@ const meta = {
       options: notificationTargetOptions,
     }),
   ],
-  pageGoal: '管理通知触达和消息查看。',
-  pendingItems: [
-    '消息通知具体触发场景。',
-    '消息通知各场景文案范围。',
-    '是否需要列表打印或报表下载类能力。',
-  ],
-  permissionPoints: ['查看通知'],
-  processSteps: [
-    '进入消息通知页。',
-    '查看通知对象与通知方式。',
-    '按需查看详情或重新发送。',
+  columns: [
+    { key: 'title', label: '通知标题' },
+    { key: 'channel', label: '通知方式' },
+    { key: 'target', label: '通知对象' },
+    { key: 'status', label: '发送状态' },
+    { key: 'updatedAt', label: '更新时间' },
   ],
   rowActions: [
     {
@@ -160,6 +139,35 @@ const meta = {
       permissionPoints: ['查看通知'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '管理通知触达和消息查看。',
+  description: '管理站内信、短信、邮件等通知触达配置和消息查看。',
+  documentNotes: [
+    '文档已明确通知对象为租户管理员、门店管理员。',
+    '通知方式包括站内信、短信、邮件，具体触发场景后续可继续补充。',
+  ],
+  processSteps: [
+    '进入消息通知页。',
+    '查看通知对象与通知方式。',
+    '按需查看详情或重新发送。',
+  ],
+  permissionPoints: ['查看通知'],
+  exceptions: [
+    '消息通知的具体触发场景和文案范围后续仍可继续补充。',
+    '当前文档未要求报表下载或打印能力。',
+  ],
+  pendingItems: [
+    '消息通知具体触发场景。',
+    '消息通知各场景文案范围。',
+    '是否需要列表打印或报表下载类能力。',
+  ],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

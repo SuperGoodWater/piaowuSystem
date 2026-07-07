@@ -6,7 +6,7 @@ import {
 import { moduleScopeOptions, roleNameOptions } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '保存权限配置',
@@ -23,18 +23,6 @@ const meta = {
       permissionPoints: ['查看'],
     },
   ],
-  columns: [
-    { key: 'roleName', label: '角色名称' },
-    { key: 'moduleScope', label: '模块范围' },
-    { key: 'permissionCount', label: '权限点数量' },
-    { key: 'updatedBy', label: '最后修改人' },
-    { key: 'updatedAt', label: '最后修改时间' },
-  ],
-  description: '按角色或职能配置功能级权限，承接文档中的权限点规格。',
-  documentNotes: [
-    '需要覆盖租户、门店、版本、权益、联营、应用、资源、公告、日志与通知等权限点。',
-  ],
-  exceptions: ['保存权限配置前需确保角色与模块范围合法。'],
   filters: [
     createSelectFilter({
       field: 'roleName',
@@ -47,9 +35,13 @@ const meta = {
       options: moduleScopeOptions,
     }),
   ],
-  pageGoal: '配置功能级权限并保存权限边界。',
-  permissionPoints: ['查看', '权限配置'],
-  processSteps: ['进入员工权限配置页。', '勾选功能权限。', '保存配置。'],
+  columns: [
+    { key: 'roleName', label: '角色名称' },
+    { key: 'moduleScope', label: '模块范围' },
+    { key: 'permissionCount', label: '权限点数量' },
+    { key: 'updatedBy', label: '最后修改人' },
+    { key: 'updatedAt', label: '最后修改时间' },
+  ],
   rowActions: [
     {
       label: '查看权限',
@@ -103,6 +95,22 @@ const meta = {
       permissionPoints: ['权限配置'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '配置功能级权限并保存权限边界。',
+  description: '按角色或职能配置功能级权限，承接文档中的权限点规格。',
+  documentNotes: [
+    '需要覆盖租户、门店、版本、权益、联营、应用、资源、公告、日志与通知等权限点。',
+  ],
+  processSteps: ['进入员工权限配置页。', '勾选功能权限。', '保存配置。'],
+  permissionPoints: ['查看', '权限配置'],
+  exceptions: ['保存权限配置前需确保角色与模块范围合法。'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

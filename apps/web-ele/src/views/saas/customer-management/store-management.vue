@@ -14,7 +14,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建门店',
@@ -97,37 +97,6 @@ const meta = {
       permissionPoints: ['恢复'],
     },
   ],
-  columns: [
-    { key: 'storeName', label: '门店名称' },
-    { key: 'tenantName', label: '所属租户' },
-    { key: 'storeType', label: '门店类型' },
-    { key: 'version', label: '门店版本' },
-    { key: 'status', label: '门店状态' },
-    { key: 'managerPhone', label: '管理员手机号' },
-  ],
-  description: '管理门店基础信息、状态流转和版本切换，并提供门店详情查看入口。',
-  documentNotes: [
-    '门店类型创建后不可修改。',
-    '门店状态支持正常、停用、过期、注销，注销后不可逆。',
-  ],
-  exceptions: [
-    '门店类型必填。',
-    '门店名称必填。',
-    '门店类型创建成功后不可修改。',
-    '门店注销后不可逆。',
-  ],
-  fields: [
-    { label: '所属租户', note: '归属租户', required: true },
-    { label: '门店类型', note: '创建后不可修改', required: true },
-    { label: '门店名称', note: '门店展示名称', required: true },
-    { label: '地址', note: '门店地址', required: true },
-    { label: '详细地址', note: '门店详细地址', required: true },
-    { label: '手机号', note: '门店管理员手机号', required: true },
-    { label: '用户名', note: '门店管理员用户名', required: true },
-    { label: '密码', note: '门店管理员初始密码', required: true },
-    { label: '门店状态', note: '系统生成：正常 / 停用 / 过期 / 注销' },
-    { label: '门店版本', note: '创建后可配置' },
-  ],
   filters: [
     createTextFilter({ field: 'storeName', label: '门店名称' }),
     createSelectFilter({
@@ -146,14 +115,13 @@ const meta = {
       options: storeStatusOptions,
     }),
   ],
-  pageGoal: '查看和筛选门店，处理停用、恢复、注销、切换版本等操作。',
-  permissionPoints: ['查看', '新建', '停用', '恢复', '注销'],
-  processSteps: [
-    '在租户下进入门店列表。',
-    '点击“新建门店”。',
-    '输入门店类型、名称、地址、详细地址、手机号、用户名、密码。',
-    '提交后生成门店。',
-    '创建成功后允许继续设置门店版本。',
+  columns: [
+    { key: 'storeName', label: '门店名称' },
+    { key: 'tenantName', label: '所属租户' },
+    { key: 'storeType', label: '门店类型' },
+    { key: 'version', label: '门店版本' },
+    { key: 'status', label: '门店状态' },
+    { key: 'managerPhone', label: '管理员手机号' },
   ],
   rowActions: [
     {
@@ -194,44 +162,6 @@ const meta = {
       storeType: '游客中心',
       tenantName: '海岸线文旅',
       version: '基础版',
-    },
-  ],
-  statusTransitions: [
-    {
-      current: '正常',
-      note: '由SaaS方手动触发',
-      target: '停用',
-      trigger: '手动停用',
-    },
-    {
-      current: '正常',
-      note: '系统自动触发',
-      target: '过期',
-      trigger: '权益到期',
-    },
-    {
-      current: '停用',
-      note: '恢复正常使用',
-      target: '正常',
-      trigger: '手动恢复',
-    },
-    {
-      current: '过期',
-      note: '权益续费后恢复',
-      target: '正常',
-      trigger: '续费恢复',
-    },
-    {
-      current: '过期',
-      note: '延长期限后恢复',
-      target: '正常',
-      trigger: '延期',
-    },
-    {
-      current: '正常 / 停用 / 过期',
-      note: '注销后不可逆',
-      target: '注销',
-      trigger: '注销',
     },
   ],
   supportActions: [
@@ -296,6 +226,84 @@ const meta = {
       permissionPoints: ['查看'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '查看和筛选门店，处理停用、恢复、注销、切换版本等操作。',
+  description: '管理门店基础信息、状态流转和版本切换，并提供门店详情查看入口。',
+  documentNotes: [
+    '门店类型创建后不可修改。',
+    '门店状态支持正常、停用、过期、注销，注销后不可逆。',
+  ],
+  fields: [
+    { label: '所属租户', note: '归属租户', required: true },
+    { label: '门店类型', note: '创建后不可修改', required: true },
+    { label: '门店名称', note: '门店展示名称', required: true },
+    { label: '地址', note: '门店地址', required: true },
+    { label: '详细地址', note: '门店详细地址', required: true },
+    { label: '手机号', note: '门店管理员手机号', required: true },
+    { label: '用户名', note: '门店管理员用户名', required: true },
+    { label: '密码', note: '门店管理员初始密码', required: true },
+    { label: '门店状态', note: '系统生成：正常 / 停用 / 过期 / 注销' },
+    { label: '门店版本', note: '创建后可配置' },
+  ],
+  processSteps: [
+    '在租户下进入门店列表。',
+    '点击“新建门店”。',
+    '输入门店类型、名称、地址、详细地址、手机号、用户名、密码。',
+    '提交后生成门店。',
+    '创建成功后允许继续设置门店版本。',
+  ],
+  permissionPoints: ['查看', '新建', '停用', '恢复', '注销'],
+  exceptions: [
+    '门店类型必填。',
+    '门店名称必填。',
+    '门店类型创建成功后不可修改。',
+    '门店注销后不可逆。',
+  ],
+  statusTransitions: [
+    {
+      current: '正常',
+      note: '由SaaS方手动触发',
+      target: '停用',
+      trigger: '手动停用',
+    },
+    {
+      current: '正常',
+      note: '系统自动触发',
+      target: '过期',
+      trigger: '权益到期',
+    },
+    {
+      current: '停用',
+      note: '恢复正常使用',
+      target: '正常',
+      trigger: '手动恢复',
+    },
+    {
+      current: '过期',
+      note: '权益续费后恢复',
+      target: '正常',
+      trigger: '续费恢复',
+    },
+    {
+      current: '过期',
+      note: '延长期限后恢复',
+      target: '正常',
+      trigger: '延期',
+    },
+    {
+      current: '正常 / 停用 / 过期',
+      note: '注销后不可逆',
+      target: '注销',
+      trigger: '注销',
+    },
+  ],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

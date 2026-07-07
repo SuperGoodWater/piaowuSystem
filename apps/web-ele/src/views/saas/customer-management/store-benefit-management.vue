@@ -11,7 +11,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '购买权益',
@@ -66,30 +66,6 @@ const meta = {
       permissionPoints: ['关闭'],
     },
   ],
-  columns: [
-    { key: 'storeName', label: '所属门店' },
-    { key: 'benefitName', label: '权益名称' },
-    { key: 'startAt', label: '生效时间' },
-    { key: 'endAt', label: '到期时间' },
-    { key: 'status', label: '权益状态' },
-  ],
-  description: '管理门店权益绑定、生效时间和到期时间，并支持购买、续期和关闭。',
-  documentNotes: [
-    '权益状态包括生效中、已到期、已关闭。',
-    '权益到期后对应功能入口关闭，续期支持叠加购买。',
-  ],
-  exceptions: [
-    '权益到期后关闭对应功能入口。',
-    '续期支持叠加购买，延长到期时间。',
-    '手动关闭后权益不可继续使用。',
-  ],
-  fields: [
-    { label: '所属门店', note: '权益绑定门店', required: true },
-    { label: '权益名称', note: '权益标识名称', required: true },
-    { label: '生效时间', note: '权益开始时间', required: true },
-    { label: '到期时间', note: '权益结束时间', required: true },
-    { label: '权益状态', note: '系统生成：生效中 / 已到期 / 已关闭' },
-  ],
   filters: [
     createTextFilter({ field: 'storeName', label: '门店名称' }),
     createSelectFilter({
@@ -103,15 +79,12 @@ const meta = {
       options: benefitStatusOptions,
     }),
   ],
-  pageGoal: '维护门店权益有效期并处理购买、续期、关闭等关键动作。',
-  permissionPoints: ['查看', '购买', '续期', '关闭'],
-  processSteps: [
-    '进入门店权益管理页。',
-    '选择权益并绑定到门店。',
-    '设置生效时间与到期时间。',
-    '权益生效后开放对应入口。',
-    '权益到期后关闭对应入口。',
-    '如需续期，支持叠加购买延长到期时间。',
+  columns: [
+    { key: 'storeName', label: '所属门店' },
+    { key: 'benefitName', label: '权益名称' },
+    { key: 'startAt', label: '生效时间' },
+    { key: 'endAt', label: '到期时间' },
+    { key: 'status', label: '权益状态' },
   ],
   rowActions: [
     {
@@ -149,26 +122,6 @@ const meta = {
       startAt: '2025-07-01',
       status: '已到期',
       storeName: '海岸线游客中心',
-    },
-  ],
-  statusTransitions: [
-    {
-      current: '生效中',
-      note: '对应功能入口关闭',
-      target: '已到期',
-      trigger: '到期',
-    },
-    {
-      current: '生效中',
-      note: '人工关闭权益',
-      target: '已关闭',
-      trigger: '手动关闭',
-    },
-    {
-      current: '已到期',
-      note: '叠加购买用于续期',
-      target: '生效中',
-      trigger: '续期',
     },
   ],
   supportActions: [
@@ -245,6 +198,61 @@ const meta = {
       ],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '维护门店权益有效期并处理购买、续期、关闭等关键动作。',
+  description: '管理门店权益绑定、生效时间和到期时间，并支持购买、续期和关闭。',
+  documentNotes: [
+    '权益状态包括生效中、已到期、已关闭。',
+    '权益到期后对应功能入口关闭，续期支持叠加购买。',
+  ],
+  fields: [
+    { label: '所属门店', note: '权益绑定门店', required: true },
+    { label: '权益名称', note: '权益标识名称', required: true },
+    { label: '生效时间', note: '权益开始时间', required: true },
+    { label: '到期时间', note: '权益结束时间', required: true },
+    { label: '权益状态', note: '系统生成：生效中 / 已到期 / 已关闭' },
+  ],
+  processSteps: [
+    '进入门店权益管理页。',
+    '选择权益并绑定到门店。',
+    '设置生效时间与到期时间。',
+    '权益生效后开放对应入口。',
+    '权益到期后关闭对应入口。',
+    '如需续期，支持叠加购买延长到期时间。',
+  ],
+  permissionPoints: ['查看', '购买', '续期', '关闭'],
+  exceptions: [
+    '权益到期后关闭对应功能入口。',
+    '续期支持叠加购买，延长到期时间。',
+    '手动关闭后权益不可继续使用。',
+  ],
+  statusTransitions: [
+    {
+      current: '生效中',
+      note: '对应功能入口关闭',
+      target: '已到期',
+      trigger: '到期',
+    },
+    {
+      current: '生效中',
+      note: '人工关闭权益',
+      target: '已关闭',
+      trigger: '手动关闭',
+    },
+    {
+      current: '已到期',
+      note: '叠加购买用于续期',
+      target: '生效中',
+      trigger: '续期',
+    },
+  ],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

@@ -5,7 +5,6 @@ import type {
   SaaSFilterField,
   SaaSInteractionSpec,
   SaaSPageMeta,
-  SaaSSupportAction,
 } from './page-meta';
 
 import type { VbenFormSchema } from '#/adapter/form';
@@ -13,13 +12,14 @@ import type { VbenFormSchema } from '#/adapter/form';
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { Page, useVbenDrawer } from '@vben/common-ui';
+import { Page } from '@vben/common-ui';
 
 import {
   ElButton,
   ElDescriptions,
   ElDescriptionsItem,
   ElDrawer,
+  ElEmpty,
   ElPagination,
   ElSpace,
   ElTable,
@@ -40,12 +40,12 @@ const route = useRoute();
 const activeAction = ref('');
 const detailVisible = ref(false);
 const explanationVisible = ref(false);
-const [SupportDrawer, supportDrawerApi] = useVbenDrawer({
-  closeOnClickModal: false,
-});
+const detailExplanationVisible = ref(false);
+
 const [FilterForm, filterFormApi] = useVbenForm({
+  actionLayout: 'newLine',
   actionPosition: 'right',
-  actionWrapperClass: 'pt-1',
+  actionWrapperClass: 'pt-3 flex-wrap',
   commonConfig: {
     componentProps: {
       class: 'w-full',
@@ -64,19 +64,8 @@ const [FilterForm, filterFormApi] = useVbenForm({
   },
   wrapperClass: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
 });
+
 const [DetailActionForm, detailActionFormApi] = useVbenForm({
-  commonConfig: {
-    componentProps: {
-      class: 'w-full',
-    },
-  },
-  handleSubmit: () => undefined,
-  layout: 'vertical',
-  schema: [],
-  showDefaultActions: false,
-  wrapperClass: 'grid-cols-1 md:grid-cols-2',
-});
-const [SupportActionForm, supportActionFormApi] = useVbenForm({
   commonConfig: {
     componentProps: {
       class: 'w-full',
@@ -94,24 +83,17 @@ const pagePriority = computed(() => String(route.meta.priority ?? 'P1'));
 const tableData = computed(() =>
   props.meta.sampleData.map((item) => ({ ...item })),
 );
-const actionCatalog = computed<(SaaSActionItem | SaaSSupportAction)[]>(() => [
+const actionCatalog = computed<SaaSActionItem[]>(() => [
   ...props.meta.actions,
   ...props.meta.rowActions,
-  ...(props.meta.supportActions ?? []),
 ]);
-const activeInteraction = computed(() => {
-  return actionCatalog.value.find((item) => item.label === activeAction.value);
-});
+const activeInteraction = computed(() =>
+  actionCatalog.value.find((item) => item.label === activeAction.value),
+);
 
 function openAction(action: SaaSActionItem) {
   activeAction.value = action.label;
   detailVisible.value = true;
-}
-
-function handleSupportAction(action: SaaSSupportAction) {
-  activeAction.value = action.label;
-  supportDrawerApi.setState({ title: action.label });
-  supportDrawerApi.open();
 }
 
 function getInteractionGoal(interaction?: SaaSInteractionSpec) {
@@ -277,9 +259,7 @@ function applyInteractionForm(interaction?: SaaSInteractionSpec) {
   const defaults = buildDefaultValues(interaction?.fields ?? []);
 
   detailActionFormApi.setState({ schema });
-  supportActionFormApi.setState({ schema });
   detailActionFormApi.resetForm({ values: defaults });
-  supportActionFormApi.resetForm({ values: defaults });
 }
 
 watch(
@@ -300,6 +280,12 @@ watch(
   },
   { immediate: true },
 );
+
+watch(detailVisible, (visible) => {
+  if (!visible) {
+    detailExplanationVisible.value = false;
+  }
+});
 </script>
 
 <template>
@@ -326,14 +312,6 @@ watch(
               @click="openAction(action)"
             >
               {{ action.label }}
-            </ElButton>
-            <ElButton
-              v-for="supportAction in meta.supportActions || []"
-              :key="supportAction.label"
-              plain
-              @click="handleSupportAction(supportAction)"
-            >
-              {{ supportAction.label }}
             </ElButton>
           </template>
         </FilterForm>
@@ -495,14 +473,56 @@ watch(
       </div>
     </ExplanationDialog>
 
-    <ElDrawer v-model="detailVisible" :title="activeAction" size="40%">
+    <ElDrawer v-model="detailVisible" size="40%">
+      <template #header>
+        <div class="flex items-center gap-3">
+          <span class="text-base font-medium">{{ activeAction }}</span>
+          <ElButton
+            link
+            type="primary"
+            @click="detailExplanationVisible = true"
+          >
+            查看说明
+          </ElButton>
+        </div>
+      </template>
+
       <div class="flex flex-col gap-4">
-        <p class="text-sm leading-6 text-[var(--el-text-color-secondary)]">
-          {{
-            activeInteraction?.description ||
-            '当前动作已预留实现位置，后续可在这里接入真实的表单、详情、审核或发布流程。'
-          }}
-        </p>
+        <div
+          v-if="
+            activeInteraction?.fields && activeInteraction.fields.length > 0
+          "
+        >
+          <div class="mb-2 text-sm font-medium">表单内容</div>
+          <DetailActionForm />
+          <div class="flex justify-end gap-3">
+            <ElButton
+              @click="
+                detailActionFormApi.resetForm({
+                  values: buildDefaultValues(activeInteraction?.fields ?? []),
+                })
+              "
+            >
+              重置
+            </ElButton>
+            <ElButton type="primary" @click="detailActionFormApi.submitForm">
+              提交
+            </ElButton>
+          </div>
+        </div>
+
+        <ElEmpty
+          v-else
+          description="当前操作内容待补充，可在这里接入详情展示或业务表单。"
+        />
+      </div>
+    </ElDrawer>
+
+    <ExplanationDialog
+      v-model:visible="detailExplanationVisible"
+      :title="activeAction"
+    >
+      <div class="flex flex-col gap-4">
         <ElDescriptions :column="1" border>
           <ElDescriptionsItem label="页面">
             {{ pageTitle }}
@@ -513,6 +533,12 @@ watch(
           <ElDescriptionsItem label="目标">
             {{ getInteractionGoal(activeInteraction) }}
           </ElDescriptionsItem>
+          <ElDescriptionsItem
+            v-if="activeInteraction?.description"
+            label="说明"
+          >
+            {{ activeInteraction.description }}
+          </ElDescriptionsItem>
         </ElDescriptions>
 
         <div
@@ -522,7 +548,7 @@ watch(
           "
           class="rounded-lg border border-dashed border-[var(--el-border-color)] bg-[var(--el-fill-color-lighter)] p-4"
         >
-          <div class="mb-2 text-sm font-medium">动作说明</div>
+          <div class="mb-2 text-sm font-medium">规则提醒</div>
           <ul
             class="list-disc pl-5 text-sm leading-6 text-[var(--el-text-color-secondary)]"
           >
@@ -537,23 +563,6 @@ watch(
             activeInteraction?.fields && activeInteraction.fields.length > 0
           "
         >
-          <div class="mb-2 text-sm font-medium">表单骨架</div>
-          <DetailActionForm />
-          <div class="flex justify-end gap-3">
-            <ElButton
-              @click="
-                detailActionFormApi.resetForm({
-                  values: buildDefaultValues(activeInteraction?.fields ?? []),
-                })
-              "
-            >
-              重置
-            </ElButton>
-            <ElButton type="primary" @click="detailActionFormApi.submitForm">
-提交
-</ElButton>
-          </div>
-
           <div class="mb-2 text-sm font-medium">涉及字段</div>
           <ElTable
             :data="activeInteraction.fields.map((item) => ({ ...item }))"
@@ -640,122 +649,7 @@ watch(
           </ElTable>
         </div>
       </div>
-    </ElDrawer>
-
-    <SupportDrawer class="w-150">
-      <div class="flex flex-col gap-4 p-1">
-        <p class="text-sm leading-6 text-[var(--el-text-color-secondary)]">
-          {{
-            activeInteraction?.description ||
-            '这里作为支撑交互容器，后续可继续扩展为配置抽屉、编辑抽屉、发布抽屉等。'
-          }}
-        </p>
-        <ElDescriptions :column="1" border>
-          <ElDescriptionsItem label="页面">
-            {{ pageTitle }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="当前动作">
-            {{ activeAction }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="目标">
-            {{ getInteractionGoal(activeInteraction) }}
-          </ElDescriptionsItem>
-        </ElDescriptions>
-
-        <div
-          v-if="
-            activeInteraction?.documentNotes &&
-            activeInteraction.documentNotes.length > 0
-          "
-          class="rounded-lg border border-dashed border-[var(--el-border-color)] bg-[var(--el-fill-color-lighter)] p-4"
-        >
-          <div class="mb-2 text-sm font-medium">规则提醒</div>
-          <ul
-            class="list-disc pl-5 text-sm leading-6 text-[var(--el-text-color-secondary)]"
-          >
-            <li v-for="note in activeInteraction.documentNotes" :key="note">
-              {{ note }}
-            </li>
-          </ul>
-        </div>
-
-        <div
-          v-if="
-            activeInteraction?.fields && activeInteraction.fields.length > 0
-          "
-        >
-          <div class="mb-2 text-sm font-medium">抽屉表单骨架</div>
-          <SupportActionForm />
-          <div class="flex justify-end gap-3">
-            <ElButton
-              @click="
-                supportActionFormApi.resetForm({
-                  values: buildDefaultValues(activeInteraction?.fields ?? []),
-                })
-              "
-            >
-              重置
-            </ElButton>
-            <ElButton type="primary" @click="supportActionFormApi.submitForm">
-提交
-</ElButton>
-          </div>
-
-          <div class="mb-2 text-sm font-medium">配置字段</div>
-          <ElTable
-            :data="activeInteraction.fields.map((item) => ({ ...item }))"
-            max-height="320"
-            stripe
-          >
-            <ElTable.TableColumn label="字段" prop="label" min-width="160" />
-            <ElTable.TableColumn label="是否必填" min-width="120">
-              <template #default="{ row }">
-                <ElTag :type="row.required ? 'danger' : 'info'">
-                  {{ row.required ? '必填' : '非必填' }}
-                </ElTag>
-              </template>
-            </ElTable.TableColumn>
-            <ElTable.TableColumn label="说明" prop="note" min-width="320" />
-          </ElTable>
-        </div>
-
-        <div
-          v-if="
-            activeInteraction?.processSteps &&
-            activeInteraction.processSteps.length > 0
-          "
-          class="flex flex-col gap-2"
-        >
-          <div class="text-sm font-medium">交互流程</div>
-          <ol
-            class="list-decimal pl-5 text-sm leading-6 text-[var(--el-text-color-primary)]"
-          >
-            <li v-for="step in activeInteraction.processSteps" :key="step">
-              {{ step }}
-            </li>
-          </ol>
-        </div>
-
-        <div
-          v-if="
-            activeInteraction?.permissionPoints &&
-            activeInteraction.permissionPoints.length > 0
-          "
-          class="flex flex-col gap-2"
-        >
-          <div class="text-sm font-medium">权限要求</div>
-          <ElSpace wrap>
-            <ElTag
-              v-for="permission in activeInteraction.permissionPoints"
-              :key="permission"
-              type="warning"
-            >
-              {{ permission }}
-            </ElTag>
-          </ElSpace>
-        </div>
-      </div>
-    </SupportDrawer>
+    </ExplanationDialog>
   </Page>
 </template>
 
@@ -768,8 +662,13 @@ watch(
   row-gap: 4px;
 }
 
-.saas-filter-panel :deep(.flex.items-center.gap-3) {
+.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3) {
+  row-gap: 12px;
   padding-bottom: 0;
+}
+
+.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3 .el-button) {
+  margin-left: 0;
 }
 
 .saas-table-panel {

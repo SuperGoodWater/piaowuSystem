@@ -12,7 +12,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建模板',
@@ -58,31 +58,6 @@ const meta = {
       permissionPoints: ['查看'],
     },
   ],
-  columns: [
-    { key: 'templateName', label: '模板名称' },
-    { key: 'templateType', label: '模板类型' },
-    { key: 'scope', label: '适用范围' },
-    { key: 'status', label: '状态' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理打印模板，支持新建、编辑、预览和停用。',
-  documentNotes: [
-    '打印模板页用于管理模板新建、编辑、预览和停用。',
-    '模板适用范围可按门店类型控制。',
-  ],
-  fields: [
-    { label: '模板名称', note: '模板展示名称', required: true },
-    { label: '模板类型', note: '如小票模板、票面模板', required: true },
-    { label: '适用范围', note: '如景区门店、游客中心', required: true },
-    { label: '状态', note: '启用 / 停用', required: true },
-  ],
-  permissionPoints: ['查看', '新建', '编辑', '停用'],
-  processSteps: [
-    '进入打印模板页。',
-    '新建模板。',
-    '编辑模板。',
-    '按需停用模板。',
-  ],
   filters: [
     createTextFilter({ field: 'templateName', label: '模板名称' }),
     createSelectFilter({
@@ -96,7 +71,13 @@ const meta = {
       options: tenantStatusOptions,
     }),
   ],
-  pageGoal: '管理打印模板。',
+  columns: [
+    { key: 'templateName', label: '模板名称' },
+    { key: 'templateType', label: '模板类型' },
+    { key: 'scope', label: '适用范围' },
+    { key: 'status', label: '状态' },
+    { key: 'updatedAt', label: '更新时间' },
+  ],
   rowActions: [
     {
       label: '编辑',
@@ -164,6 +145,33 @@ const meta = {
       permissionPoints: ['新建', '编辑'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '管理打印模板。',
+  description: '管理打印模板，支持新建、编辑、预览和停用。',
+  documentNotes: [
+    '打印模板页用于管理模板新建、编辑、预览和停用。',
+    '模板适用范围可按门店类型控制。',
+  ],
+  fields: [
+    { label: '模板名称', note: '模板展示名称', required: true },
+    { label: '模板类型', note: '如小票模板、票面模板', required: true },
+    { label: '适用范围', note: '如景区门店、游客中心', required: true },
+    { label: '状态', note: '启用 / 停用', required: true },
+  ],
+  processSteps: [
+    '进入打印模板页。',
+    '新建模板。',
+    '编辑模板。',
+    '按需停用模板。',
+  ],
+  permissionPoints: ['查看', '新建', '编辑', '停用'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

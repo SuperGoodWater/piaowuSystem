@@ -11,7 +11,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建公告',
@@ -56,23 +56,6 @@ const meta = {
       permissionPoints: ['发布', '下线'],
     },
   ],
-  columns: [
-    { key: 'title', label: '公告标题' },
-    { key: 'target', label: '通知对象' },
-    { key: 'status', label: '状态' },
-    { key: 'publishTime', label: '发布时间' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理顶部公告，支持新建、编辑和启停。',
-  documentNotes: ['顶部公告面向租户管理员、门店管理员进行通知展示。'],
-  fields: [
-    { label: '公告标题', note: '顶部公告标题', required: true },
-    { label: '通知对象', note: '租户管理员 / 门店管理员', required: true },
-    { label: '发布时间', note: '公告展示时间' },
-    { label: '状态', note: '启用 / 停用', required: true },
-  ],
-  permissionPoints: ['查看', '新建', '编辑', '发布', '下线'],
-  processSteps: ['进入顶部公告页。', '新建或编辑公告。', '按需启停公告。'],
   filters: [
     createTextFilter({ field: 'title', label: '公告标题' }),
     createSelectFilter({
@@ -86,7 +69,13 @@ const meta = {
       options: tenantStatusOptions,
     }),
   ],
-  pageGoal: '管理顶部公告。',
+  columns: [
+    { key: 'title', label: '公告标题' },
+    { key: 'target', label: '通知对象' },
+    { key: 'status', label: '状态' },
+    { key: 'publishTime', label: '发布时间' },
+    { key: 'updatedAt', label: '更新时间' },
+  ],
   rowActions: [
     {
       label: '编辑',
@@ -141,6 +130,25 @@ const meta = {
       permissionPoints: ['新建', '编辑', '发布', '下线'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '管理顶部公告。',
+  description: '管理顶部公告，支持新建、编辑和启停。',
+  documentNotes: ['顶部公告面向租户管理员、门店管理员进行通知展示。'],
+  fields: [
+    { label: '公告标题', note: '顶部公告标题', required: true },
+    { label: '通知对象', note: '租户管理员 / 门店管理员', required: true },
+    { label: '发布时间', note: '公告展示时间' },
+    { label: '状态', note: '启用 / 停用', required: true },
+  ],
+  processSteps: ['进入顶部公告页。', '新建或编辑公告。', '按需启停公告。'],
+  permissionPoints: ['查看', '新建', '编辑', '发布', '下线'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

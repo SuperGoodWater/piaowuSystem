@@ -8,7 +8,7 @@ import {
 import { enabledDisabledOptions } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新增品牌',
@@ -46,29 +46,6 @@ const meta = {
       permissionPoints: ['禁用'],
     },
   ],
-  columns: [
-    { key: 'brandName', label: '品牌名称' },
-    { key: 'brandCode', label: '品牌编码' },
-    { key: 'deviceCount', label: '设备数量' },
-    { key: 'status', label: '状态' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理设备品牌及其可用状态。',
-  documentNotes: [
-    '设备品牌页用于维护品牌档案，并控制品牌是否可继续被设备引用。',
-  ],
-  fields: [
-    { label: '品牌名称', note: '品牌展示名称', required: true },
-    { label: '品牌编码', note: '品牌唯一编码', required: true },
-    { label: '状态', note: '启用 / 禁用', required: true },
-  ],
-  permissionPoints: ['查看', '新建', '编辑', '禁用'],
-  processSteps: [
-    '进入设备品牌页。',
-    '新增品牌。',
-    '编辑品牌。',
-    '按需禁用品牌。',
-  ],
   filters: [
     createTextFilter({ field: 'brandName', label: '品牌名称' }),
     createTextFilter({ field: 'brandCode', label: '品牌编码' }),
@@ -78,7 +55,13 @@ const meta = {
       options: enabledDisabledOptions,
     }),
   ],
-  pageGoal: '管理设备品牌。',
+  columns: [
+    { key: 'brandName', label: '品牌名称' },
+    { key: 'brandCode', label: '品牌编码' },
+    { key: 'deviceCount', label: '设备数量' },
+    { key: 'status', label: '状态' },
+    { key: 'updatedAt', label: '更新时间' },
+  ],
   rowActions: [
     {
       label: '编辑',
@@ -132,6 +115,31 @@ const meta = {
       permissionPoints: ['新建', '编辑'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '管理设备品牌。',
+  description: '管理设备品牌及其可用状态。',
+  documentNotes: [
+    '设备品牌页用于维护品牌档案，并控制品牌是否可继续被设备引用。',
+  ],
+  fields: [
+    { label: '品牌名称', note: '品牌展示名称', required: true },
+    { label: '品牌编码', note: '品牌唯一编码', required: true },
+    { label: '状态', note: '启用 / 禁用', required: true },
+  ],
+  processSteps: [
+    '进入设备品牌页。',
+    '新增品牌。',
+    '编辑品牌。',
+    '按需禁用品牌。',
+  ],
+  permissionPoints: ['查看', '新建', '编辑', '禁用'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

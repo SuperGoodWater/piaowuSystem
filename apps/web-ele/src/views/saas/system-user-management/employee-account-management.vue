@@ -12,7 +12,7 @@ import {
 } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建员工',
@@ -57,27 +57,6 @@ const meta = {
       permissionPoints: ['禁用'],
     },
   ],
-  columns: [
-    { key: 'name', label: '员工姓名' },
-    { key: 'account', label: '登录账号' },
-    { key: 'department', label: '所属部门' },
-    { key: 'role', label: '角色' },
-    { key: 'status', label: '状态' },
-    { key: 'updatedAt', label: '更新时间' },
-  ],
-  description: '管理 SaaS 内部员工账号、组织归属和启停状态。',
-  documentNotes: [
-    '员工账号页用于维护 SaaS 内部员工资料和组织归属。',
-    '员工权限配置应通过功能级权限点进行控制。',
-  ],
-  exceptions: ['员工权限配置应受功能级权限点控制。'],
-  fields: [
-    { label: '员工姓名', note: '员工展示名称', required: true },
-    { label: '登录账号', note: '员工登录账号', required: true },
-    { label: '所属部门', note: '组织归属', required: true },
-    { label: '角色', note: '用于承接功能权限范围', required: true },
-    { label: '状态', note: '启用 / 禁用' },
-  ],
   filters: [
     createTextFilter({ field: 'name', label: '员工姓名' }),
     createTextFilter({ field: 'account', label: '登录账号' }),
@@ -92,13 +71,13 @@ const meta = {
       options: enabledDisabledOptions,
     }),
   ],
-  pageGoal: '查看与维护 SaaS 内部员工。',
-  permissionPoints: ['查看', '新建', '编辑', '禁用', '权限配置'],
-  processSteps: [
-    '进入员工列表页。',
-    '新建或编辑员工。',
-    '按需禁用员工。',
-    '进入员工权限配置页进行功能授权。',
+  columns: [
+    { key: 'name', label: '员工姓名' },
+    { key: 'account', label: '登录账号' },
+    { key: 'department', label: '所属部门' },
+    { key: 'role', label: '角色' },
+    { key: 'status', label: '状态' },
+    { key: 'updatedAt', label: '更新时间' },
   ],
   rowActions: [
     {
@@ -180,6 +159,35 @@ const meta = {
       permissionPoints: ['权限配置'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '查看与维护 SaaS 内部员工。',
+  description: '管理 SaaS 内部员工账号、组织归属和启停状态。',
+  documentNotes: [
+    '员工账号页用于维护 SaaS 内部员工资料和组织归属。',
+    '员工权限配置应通过功能级权限点进行控制。',
+  ],
+  fields: [
+    { label: '员工姓名', note: '员工展示名称', required: true },
+    { label: '登录账号', note: '员工登录账号', required: true },
+    { label: '所属部门', note: '组织归属', required: true },
+    { label: '角色', note: '用于承接功能权限范围', required: true },
+    { label: '状态', note: '启用 / 禁用' },
+  ],
+  processSteps: [
+    '进入员工列表页。',
+    '新建或编辑员工。',
+    '按需禁用员工。',
+    '进入员工权限配置页进行功能授权。',
+  ],
+  permissionPoints: ['查看', '新建', '编辑', '禁用', '权限配置'],
+  exceptions: ['员工权限配置应受功能级权限点控制。'],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 

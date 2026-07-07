@@ -8,7 +8,7 @@ import {
 import { tenantStatusOptions } from '../_shared/options';
 import SaaSPageShell from '../_shared/saas-page-shell.vue';
 
-const meta = {
+const interactions = {
   actions: [
     {
       label: '新建租户',
@@ -43,92 +43,26 @@ const meta = {
       ],
       permissionPoints: ['新建'],
     },
-    {
-      label: '批量启用',
-      type: 'success',
-      description: '批量恢复已停用租户的正常使用状态。',
-      goal: '恢复租户及其下门店、员工的可用状态。',
-      permissionPoints: ['启用'],
-      statusTransitions: [
-        {
-          current: '停用',
-          note: '恢复租户正常使用',
-          target: '启用',
-          trigger: '启用',
-        },
-      ],
-    },
-    {
-      label: '批量停用',
-      type: 'warning',
-      description: '批量停用租户，并同步停用其下门店和员工。',
-      documentNotes: ['停用后其下所有门店与员工同步停用。'],
-      goal: '统一关闭异常或暂停合作租户。',
-      permissionPoints: ['停用'],
-      statusTransitions: [
-        {
-          current: '启用',
-          note: '停用后其下所有门店与员工同步停用',
-          target: '停用',
-          trigger: '停用',
-        },
-      ],
-    },
-  ],
-  columns: [
-    { key: 'tenantName', label: '租户名称' },
-    { key: 'username', label: '顶级管理员' },
-    { key: 'phone', label: '手机号' },
-    { key: 'storeCount', label: '门店数' },
-    { key: 'status', label: '租户状态' },
-    { key: 'createdAt', label: '创建时间' },
-  ],
-  description:
-    '管理租户和顶级管理员，覆盖启用、停用、重置密码、更换手机号等关键动作。',
-  documentNotes: [
-    '租户停用后，其下所有门店与员工同步停用。',
-    '新建租户需填写手机号、用户名、密码，且手机号或用户名冲突时不可创建。',
-  ],
-  exceptions: [
-    '手机号为空时不可提交。',
-    '用户名为空时不可提交。',
-    '密码为空时不可提交。',
-    '手机号或用户名与现有规则冲突时不可创建。',
-  ],
-  fields: [
-    { label: '手机号', note: '租户顶级管理员手机号', required: true },
-    { label: '用户名', note: '租户顶级管理员登录用户名', required: true },
-    { label: '密码', note: '租户顶级管理员初始密码', required: true },
-    { label: '租户状态', note: '系统生成，启用 / 停用' },
   ],
   filters: [
-    createTextFilter({ field: 'tenantName', label: '租户名称' }),
-    createTextFilter({ field: 'username', label: '管理员账号' }),
-    createTextFilter({ field: 'phone', label: '手机号' }),
+    createTextFilter({
+      field: 'keyword',
+      label: '关键词',
+      placeholder: '请输入租户名称、管理员账号或手机号',
+    }),
     createSelectFilter({
       field: 'status',
       label: '租户状态',
       options: tenantStatusOptions,
     }),
   ],
-  pageGoal: '查看与筛选租户，并处理租户生命周期管理。',
-  permissionPoints: [
-    '查看',
-    '新建',
-    '启用',
-    '停用',
-    '重置密码',
-    '更换手机号',
-    '禁用账号',
-  ],
-  processSteps: [
-    '进入租户列表页。',
-    '点击“新建租户”。',
-    '输入手机号、用户名、密码。',
-    '系统校验信息完整性。',
-    '创建租户并生成唯一顶级管理员账号。',
-    '按配置进入初始状态。',
-    '返回租户列表，可继续配置门店。',
+  columns: [
+    { key: 'tenantName', label: '租户名称' },
+    { key: 'username', label: '管理员账号' },
+    { key: 'phone', label: '手机号' },
+    { key: 'storeCount', label: '门店数' },
+    { key: 'status', label: '租户状态' },
+    { key: 'createdAt', label: '创建时间' },
   ],
   rowActions: [
     {
@@ -169,20 +103,6 @@ const meta = {
       storeCount: '4',
       tenantName: '海岸线文旅',
       username: 'coast_admin',
-    },
-  ],
-  statusTransitions: [
-    {
-      current: '启用',
-      note: '停用后其下所有门店与员工同步停用',
-      target: '停用',
-      trigger: '停用',
-    },
-    {
-      current: '停用',
-      note: '恢复租户正常使用',
-      target: '启用',
-      trigger: '启用',
     },
   ],
   supportActions: [
@@ -228,6 +148,65 @@ const meta = {
       permissionPoints: ['查看'],
     },
   ],
+} as const;
+
+const explanations = {
+  pageGoal: '查看与筛选租户，并处理租户生命周期管理。',
+  description:
+    '管理租户和顶级管理员，覆盖启用、停用、重置密码、更换手机号等关键动作。',
+  documentNotes: [
+    '租户停用后，其下所有门店与员工同步停用。',
+    '新建租户需填写手机号、用户名、密码，且手机号或用户名冲突时不可创建。',
+  ],
+  fields: [
+    { label: '手机号', note: '租户顶级管理员手机号', required: true },
+    { label: '用户名', note: '租户顶级管理员登录用户名', required: true },
+    { label: '密码', note: '租户顶级管理员初始密码', required: true },
+    { label: '租户状态', note: '系统生成，启用 / 停用' },
+  ],
+  processSteps: [
+    '进入租户列表页。',
+    '点击“新建租户”。',
+    '输入手机号、用户名、密码。',
+    '系统校验信息完整性。',
+    '创建租户并生成唯一顶级管理员账号。',
+    '按配置进入初始状态。',
+    '返回租户列表，可继续配置门店。',
+  ],
+  permissionPoints: [
+    '查看',
+    '新建',
+    '启用',
+    '停用',
+    '重置密码',
+    '更换手机号',
+    '禁用账号',
+  ],
+  exceptions: [
+    '手机号为空时不可提交。',
+    '用户名为空时不可提交。',
+    '密码为空时不可提交。',
+    '手机号或用户名与现有规则冲突时不可创建。',
+  ],
+  statusTransitions: [
+    {
+      current: '启用',
+      note: '停用后其下所有门店与员工同步停用',
+      target: '停用',
+      trigger: '停用',
+    },
+    {
+      current: '停用',
+      note: '恢复租户正常使用',
+      target: '启用',
+      trigger: '启用',
+    },
+  ],
+} as const;
+
+const meta = {
+  ...interactions,
+  ...explanations,
 } as const;
 </script>
 
