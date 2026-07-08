@@ -100,17 +100,33 @@ const actionCatalog = computed<InteractionItem[]>(() => [
   ...interactions.actions,
   ...interactions.rowActions,
 ]);
-const activeInteraction = computed(() =>
-  actionCatalog.value.find((item) => item.label === activeAction.value),
-);
 const selectedTenant = computed(
   () =>
     tenantData.value.find((item) => item.id === selectedTenantId.value) ?? null,
 );
+const activeInteraction = computed(() => {
+  const baseAction = actionCatalog.value.find(
+    (item) =>
+      item.label ===
+      (activeAction.value === '启用' ? '停用' : activeAction.value),
+  );
+
+  if (!baseAction) {
+    return undefined;
+  }
+
+  if (activeAction.value === '启用') {
+    return createTenantStatusAction(baseAction, '停用');
+  }
+
+  return baseAction;
+});
 const isCreateMode = computed(() => activeAction.value === '新建租户');
 const isViewMode = computed(() => activeAction.value === '查看详情');
 const isResetPasswordMode = computed(() => activeAction.value === '重置密码');
-const isDisableMode = computed(() => activeAction.value === '停用租户');
+const isToggleStatusMode = computed(
+  () => activeAction.value === '停用' || activeAction.value === '启用',
+);
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
@@ -118,11 +134,12 @@ const showResetButton = computed(
   () => isCreateMode.value || isResetPasswordMode.value,
 );
 const showSubmitButton = computed(
-  () => isCreateMode.value || isResetPasswordMode.value || isDisableMode.value,
+  () =>
+    isCreateMode.value || isResetPasswordMode.value || isToggleStatusMode.value,
 );
 const submitButtonText = computed(() => {
-  if (isDisableMode.value) {
-    return '确认停用';
+  if (isToggleStatusMode.value) {
+    return activeAction.value === '启用' ? '确认启用' : '确认停用';
   }
   if (isResetPasswordMode.value) {
     return '确认重置';
@@ -401,8 +418,40 @@ function getTenantRow(row: Record<string, any>) {
   return row as TenantRecord;
 }
 
+function createTenantStatusAction(
+  action: InteractionItem,
+  status: TenantStatus,
+): InteractionItem {
+  if (action.label !== '停用') {
+    return action;
+  }
+
+  if (status === '停用') {
+    return {
+      ...action,
+      description: '启用后，当前租户下的门店和员工将恢复正常使用。',
+      documentNotes: ['启用前应确认当前租户及其门店已满足恢复使用条件。'],
+      goal: '恢复当前租户继续使用 SaaS 平台。',
+      label: '启用',
+      permissionPoints: ['启用'],
+      type: 'success',
+    };
+  }
+
+  return action;
+}
+
+function getToggleActionLabel(row: TenantRecord) {
+  return row.status === '停用' ? '启用' : '停用';
+}
+
+function getToggleActionType(action: InteractionItem, row: TenantRecord) {
+  return createTenantStatusAction(action, row.status).type || 'primary';
+}
+
 function handleRowAction(action: InteractionItem, row: Record<string, any>) {
-  openAction(action, getTenantRow(row));
+  const tenantRow = getTenantRow(row);
+  openAction(createTenantStatusAction(action, tenantRow.status), tenantRow);
 }
 
 function openAction(action: InteractionItem, row?: TenantRecord) {
@@ -516,22 +565,19 @@ async function resetTenantPassword(values: Record<string, any>) {
   closeDetailDrawer();
 }
 
-async function disableTenant() {
+async function toggleTenantStatus() {
   if (!selectedTenant.value) {
     ElMessage.warning('未找到当前租户，请重新选择');
     return;
   }
 
-  if (selectedTenant.value.status === '停用') {
-    ElMessage.info('当前租户已是停用状态');
-    closeDetailDrawer();
-    return;
-  }
+  const nextStatus: TenantStatus =
+    selectedTenant.value.status === '停用' ? '启用' : '停用';
 
   updateTenantRecord(selectedTenant.value.id, {
-    status: '停用',
+    status: nextStatus,
   });
-  ElMessage.success(`已停用租户：${selectedTenant.value.tenantName}`);
+  ElMessage.success(`已${nextStatus}租户：${selectedTenant.value.tenantName}`);
   closeDetailDrawer();
 }
 
@@ -547,8 +593,8 @@ async function handleDetailSubmit(values: Record<string, any>) {
 }
 
 async function submitActiveAction() {
-  if (isDisableMode.value) {
-    await disableTenant();
+  if (isToggleStatusMode.value) {
+    await toggleTenantStatus();
     return;
   }
 
@@ -669,7 +715,7 @@ function createInteractions(): PageInteractions {
         ],
       },
       {
-        label: '停用租户',
+        label: '停用',
         type: 'danger',
         description: '停用后，当前租户下的门店和员工将同步受到影响。',
         documentNotes: [
@@ -748,7 +794,7 @@ function createExplanations(): PageExplanations {
       { label: '租户状态', note: '当前租户是否处于启用或停用状态' },
     ],
     pageGoal: '查看与筛选租户，并完成租户生命周期内的关键管理动作。',
-    permissionPoints: ['查看', '新建', '重置密码', '停用'],
+    permissionPoints: ['查看', '新建', '重置密码', '停用', '启用'],
     processSteps: [
       '通过关键词或状态筛选需要处理的租户。',
       '从列表进入新建、详情、重置密码或停用动作。',
@@ -760,13 +806,13 @@ function createExplanations(): PageExplanations {
         current: '启用',
         note: '停用后，租户下的门店和员工登录将同步受限。',
         target: '停用',
-        trigger: '停用租户',
+        trigger: '停用',
       },
       {
         current: '停用',
-        note: '当前页面暂未提供恢复启用操作。',
-        target: '停用',
-        trigger: '查看详情',
+        note: '启用后，租户及其门店、员工将恢复正常使用。',
+        target: '启用',
+        trigger: '启用',
       },
     ],
   };
@@ -774,7 +820,7 @@ function createExplanations(): PageExplanations {
 </script>
 
 <template>
-  <Page :description="undefined" :title="undefined">
+  <Page :description="explanations.description" :title="pageTitle">
     <template #title>
       <div class="mb-2 flex items-center gap-3">
         <div class="text-lg font-semibold">
@@ -830,14 +876,18 @@ function createExplanations(): PageExplanations {
                   v-for="action in interactions.rowActions"
                   :key="action.label"
                   link
-                  :disabled="
-                    action.label === '停用租户' &&
-                    getTenantRow(row).status === '停用'
+                  :type="
+                    action.label === '停用'
+                      ? getToggleActionType(action, getTenantRow(row))
+                      : action.type || 'primary'
                   "
-                  :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
-                  {{ action.label }}
+                  {{
+                    action.label === '停用'
+                      ? getToggleActionLabel(getTenantRow(row))
+                      : action.label
+                  }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1065,15 +1115,30 @@ function createExplanations(): PageExplanations {
       </div>
 
       <div
-        v-else-if="isDisableMode && selectedTenant"
+        v-else-if="isToggleStatusMode && selectedTenant"
         class="flex flex-col gap-4"
       >
         <div class="drawer-warning-card">
-          <div class="text-sm font-medium text-[var(--el-color-danger)]">
-            停用后将同步影响该租户下的门店和员工登录
+          <div
+            class="text-sm font-medium"
+            :class="
+              activeAction === '启用'
+                ? 'text-[var(--el-color-success)]'
+                : 'text-[var(--el-color-danger)]'
+            "
+          >
+            {{
+              activeAction === '启用'
+                ? '启用后该租户下的门店和员工将恢复正常登录'
+                : '停用后将同步影响该租户下的门店和员工登录'
+            }}
           </div>
           <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
-            请确认当前操作对象无误，再点击底部“确认停用”。
+            {{
+              activeAction === '启用'
+                ? '请确认当前租户已满足恢复使用条件，再点击底部“确认启用”。'
+                : '请确认当前操作对象无误，再点击底部“确认停用”。'
+            }}
           </div>
         </div>
 

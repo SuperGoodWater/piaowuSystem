@@ -808,7 +808,7 @@ function createExplanations(): PageExplanations {
 </script>
 
 <template>
-  <Page :description="undefined" :title="undefined">
+  <Page :description="explanations.description" :title="pageTitle">
     <template #title>
       <div class="mb-2 flex items-center gap-3">
         <div class="text-lg font-semibold">
