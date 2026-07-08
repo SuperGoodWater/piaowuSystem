@@ -1,11 +1,4 @@
 <script lang="ts" setup>
-import type {
-  SaaSActionItem,
-  SaaSFieldItem,
-  SaaSFilterField,
-  SaaSPageMeta,
-} from '../_shared/page-meta';
-
 import type { VbenFormSchema } from '#/adapter/form';
 
 import { computed, ref, watch } from 'vue';
@@ -29,11 +22,145 @@ import {
 
 import { useVbenForm } from '#/adapter/form';
 
-import {
-  createSelectField,
-  createSelectFilter,
-} from '../_shared/field-factory';
-import { moduleScopeOptions, roleNameOptions } from '../_shared/options';
+interface SaaSFilterField {
+  defaultValue?: boolean | number | string | string[];
+  field?: string;
+  inputType?:
+    | 'date'
+    | 'daterange'
+    | 'password'
+    | 'select'
+    | 'switch'
+    | 'text'
+    | 'textarea';
+  label: string;
+  options?: readonly { label: string; value: boolean | number | string }[];
+  placeholder: string;
+  required?: boolean;
+  rows?: number;
+}
+
+interface SaaSColumnItem {
+  key: string;
+  label: string;
+}
+
+interface SaaSFieldItem {
+  defaultValue?: boolean | number | string | string[];
+  field?: string;
+  inputType?:
+    | 'date'
+    | 'daterange'
+    | 'password'
+    | 'select'
+    | 'switch'
+    | 'text'
+    | 'textarea';
+  label: string;
+  note: string;
+  options?: readonly { label: string; value: boolean | number | string }[];
+  rows?: number;
+  required?: boolean;
+}
+
+interface SaaSStatusTransitionItem {
+  current: string;
+  note: string;
+  target: string;
+  trigger: string;
+}
+
+interface SaaSInteractionSpec {
+  label: string;
+  description?: string;
+  documentNotes?: readonly string[];
+  fields?: readonly SaaSFieldItem[];
+  goal?: string;
+  permissionPoints?: readonly string[];
+  processSteps?: readonly string[];
+  statusTransitions?: readonly SaaSStatusTransitionItem[];
+}
+
+interface SaaSActionItem extends SaaSInteractionSpec {
+  type?: '' | 'danger' | 'info' | 'primary' | 'success' | 'warning';
+}
+
+interface SaaSSupportAction extends SaaSInteractionSpec {
+  route?: string;
+  type: 'drawer' | 'hidden-route';
+}
+
+interface SaaSPageMeta {
+  actions: readonly SaaSActionItem[];
+  columns: readonly SaaSColumnItem[];
+  description: string;
+  documentNotes?: readonly string[];
+  exceptions?: readonly string[];
+  fields?: readonly SaaSFieldItem[];
+  filters: readonly SaaSFilterField[];
+  pageGoal: string;
+  pendingItems?: readonly string[];
+  permissionPoints?: readonly string[];
+  processSteps?: readonly string[];
+  rowActions: readonly SaaSActionItem[];
+  sampleData: readonly Record<string, string>[];
+  statusTransitions?: readonly SaaSStatusTransitionItem[];
+  supportActions?: readonly SaaSSupportAction[];
+}
+
+type FieldValue = boolean | number | string | string[];
+
+type FieldOption = { label: string; value: boolean | number | string };
+
+interface BaseFieldInput {
+  defaultValue?: FieldValue;
+  field: string;
+  label: string;
+  required?: boolean;
+}
+
+interface BaseActionFieldInput extends BaseFieldInput {
+  note: string;
+}
+
+interface BaseFilterInput extends BaseFieldInput {
+  placeholder?: string;
+}
+
+function createSelectField(
+  input: BaseActionFieldInput & {
+    options: readonly FieldOption[];
+  },
+): SaaSFieldItem {
+  return {
+    ...input,
+    inputType: 'select',
+  };
+}
+
+function createSelectFilter(
+  input: BaseFilterInput & {
+    options: readonly FieldOption[];
+  },
+): SaaSFilterField {
+  return {
+    ...input,
+    inputType: 'select',
+    placeholder: input.placeholder ?? `请选择${input.label}`,
+  };
+}
+
+const moduleScopeOptions = [
+  { label: '客户管理', value: '客户管理' },
+  { label: '公告管理', value: '公告管理' },
+  { label: '平台资源管理', value: '平台资源管理' },
+] as const;
+
+const roleNameOptions = [
+  { label: '平台运营经理', value: '平台运营经理' },
+  { label: '客户成功经理', value: '客户成功经理' },
+  { label: '技术支持专员', value: '技术支持专员' },
+] as const;
 
 type PageInteractions = Pick<
   SaaSPageMeta,
@@ -694,7 +821,7 @@ function createExplanations(): PageExplanations {
 </script>
 
 <template>
-  <Page :description="explanations.description" :title="pageTitle">
+  <Page :title="pageTitle">
     <template #title>
       <div class="mb-2 flex items-center gap-3">
         <div class="text-lg font-semibold">

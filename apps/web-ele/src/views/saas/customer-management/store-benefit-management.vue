@@ -1,11 +1,4 @@
 <script lang="ts" setup>
-import type {
-  SaaSActionItem,
-  SaaSFieldItem,
-  SaaSFilterField,
-  SaaSPageMeta,
-} from '../_shared/page-meta';
-
 import type { VbenFormSchema } from '#/adapter/form';
 
 import { computed, ref, watch } from 'vue';
@@ -29,16 +22,158 @@ import {
 
 import { useVbenForm } from '#/adapter/form';
 
-import {
-  createSelectField,
-  createSelectFilter,
-  createTextFilter,
-} from '../_shared/field-factory';
-import {
-  benefitNameOptions,
-  benefitStatusOptions,
-  sampleStoreOptions,
-} from '../_shared/options';
+interface SaaSFilterField {
+  defaultValue?: boolean | number | string | string[];
+  field?: string;
+  inputType?:
+    | 'date'
+    | 'daterange'
+    | 'password'
+    | 'select'
+    | 'switch'
+    | 'text'
+    | 'textarea';
+  label: string;
+  options?: readonly { label: string; value: boolean | number | string }[];
+  placeholder: string;
+  required?: boolean;
+  rows?: number;
+}
+
+interface SaaSColumnItem {
+  key: string;
+  label: string;
+}
+
+interface SaaSFieldItem {
+  defaultValue?: boolean | number | string | string[];
+  field?: string;
+  inputType?:
+    | 'date'
+    | 'daterange'
+    | 'password'
+    | 'select'
+    | 'switch'
+    | 'text'
+    | 'textarea';
+  label: string;
+  note: string;
+  options?: readonly { label: string; value: boolean | number | string }[];
+  rows?: number;
+  required?: boolean;
+}
+
+interface SaaSStatusTransitionItem {
+  current: string;
+  note: string;
+  target: string;
+  trigger: string;
+}
+
+interface SaaSInteractionSpec {
+  label: string;
+  description?: string;
+  documentNotes?: readonly string[];
+  fields?: readonly SaaSFieldItem[];
+  goal?: string;
+  permissionPoints?: readonly string[];
+  processSteps?: readonly string[];
+  statusTransitions?: readonly SaaSStatusTransitionItem[];
+}
+
+interface SaaSActionItem extends SaaSInteractionSpec {
+  type?: '' | 'danger' | 'info' | 'primary' | 'success' | 'warning';
+}
+
+interface SaaSSupportAction extends SaaSInteractionSpec {
+  route?: string;
+  type: 'drawer' | 'hidden-route';
+}
+
+interface SaaSPageMeta {
+  actions: readonly SaaSActionItem[];
+  columns: readonly SaaSColumnItem[];
+  description: string;
+  documentNotes?: readonly string[];
+  exceptions?: readonly string[];
+  fields?: readonly SaaSFieldItem[];
+  filters: readonly SaaSFilterField[];
+  pageGoal: string;
+  pendingItems?: readonly string[];
+  permissionPoints?: readonly string[];
+  processSteps?: readonly string[];
+  rowActions: readonly SaaSActionItem[];
+  sampleData: readonly Record<string, string>[];
+  statusTransitions?: readonly SaaSStatusTransitionItem[];
+  supportActions?: readonly SaaSSupportAction[];
+}
+
+type FieldValue = boolean | number | string | string[];
+
+type FieldOption = { label: string; value: boolean | number | string };
+
+interface BaseFieldInput {
+  defaultValue?: FieldValue;
+  field: string;
+  label: string;
+  required?: boolean;
+}
+
+interface BaseActionFieldInput extends BaseFieldInput {
+  note: string;
+}
+
+interface BaseFilterInput extends BaseFieldInput {
+  placeholder?: string;
+}
+
+function createSelectField(
+  input: BaseActionFieldInput & {
+    options: readonly FieldOption[];
+  },
+): SaaSFieldItem {
+  return {
+    ...input,
+    inputType: 'select',
+  };
+}
+
+function createSelectFilter(
+  input: BaseFilterInput & {
+    options: readonly FieldOption[];
+  },
+): SaaSFilterField {
+  return {
+    ...input,
+    inputType: 'select',
+    placeholder: input.placeholder ?? `请选择${input.label}`,
+  };
+}
+
+function createTextFilter(input: BaseFilterInput): SaaSFilterField {
+  return {
+    ...input,
+    inputType: 'text',
+    placeholder: input.placeholder ?? `请输入${input.label}`,
+  };
+}
+
+const benefitNameOptions = [
+  { label: '高级营销权益', value: '高级营销权益' },
+  { label: '多门店联营权益', value: '多门店联营权益' },
+] as const;
+
+const benefitStatusOptions = [
+  { label: '生效中', value: '生效中' },
+  { label: '已到期', value: '已到期' },
+  { label: '已关闭', value: '已关闭' },
+] as const;
+
+const sampleStoreOptions = [
+  { label: '欢乐谷东区店', value: '欢乐谷东区店' },
+  { label: '欢乐谷西区店', value: '欢乐谷西区店' },
+  { label: '海岸线游客中心', value: '海岸线游客中心' },
+] as const;
 
 type PageInteractions = Pick<
   SaaSPageMeta,
@@ -826,7 +961,7 @@ function createExplanations(): PageExplanations {
 </script>
 
 <template>
-  <Page :description="explanations.description" :title="pageTitle">
+  <Page :title="pageTitle">
     <template #title>
       <div class="mb-2 flex items-center gap-3">
         <div class="text-lg font-semibold">

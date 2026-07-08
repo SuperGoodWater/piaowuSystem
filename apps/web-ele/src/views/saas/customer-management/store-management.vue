@@ -1,11 +1,4 @@
 <script lang="ts" setup>
-import type {
-  SaaSActionItem,
-  SaaSFieldItem,
-  SaaSFilterField,
-  SaaSPageMeta,
-} from '../_shared/page-meta';
-
 import type { VbenFormSchema } from '#/adapter/form';
 
 import { computed, ref, watch } from 'vue';
@@ -29,19 +22,182 @@ import {
 
 import { useVbenForm } from '#/adapter/form';
 
-import {
-  createPasswordField,
-  createSelectField,
-  createSelectFilter,
-  createTextareaField,
-  createTextField,
-  createTextFilter,
-} from '../_shared/field-factory';
-import {
-  sampleTenantOptions,
-  storeStatusOptions,
-  storeTypeOptions,
-} from '../_shared/options';
+interface SaaSFilterField {
+  defaultValue?: boolean | number | string | string[];
+  field?: string;
+  inputType?:
+    | 'date'
+    | 'daterange'
+    | 'password'
+    | 'select'
+    | 'switch'
+    | 'text'
+    | 'textarea';
+  label: string;
+  options?: readonly { label: string; value: boolean | number | string }[];
+  placeholder: string;
+  required?: boolean;
+  rows?: number;
+}
+
+interface SaaSColumnItem {
+  key: string;
+  label: string;
+}
+
+interface SaaSFieldItem {
+  defaultValue?: boolean | number | string | string[];
+  field?: string;
+  inputType?:
+    | 'date'
+    | 'daterange'
+    | 'password'
+    | 'select'
+    | 'switch'
+    | 'text'
+    | 'textarea';
+  label: string;
+  note: string;
+  options?: readonly { label: string; value: boolean | number | string }[];
+  rows?: number;
+  required?: boolean;
+}
+
+interface SaaSStatusTransitionItem {
+  current: string;
+  note: string;
+  target: string;
+  trigger: string;
+}
+
+interface SaaSInteractionSpec {
+  label: string;
+  description?: string;
+  documentNotes?: readonly string[];
+  fields?: readonly SaaSFieldItem[];
+  goal?: string;
+  permissionPoints?: readonly string[];
+  processSteps?: readonly string[];
+  statusTransitions?: readonly SaaSStatusTransitionItem[];
+}
+
+interface SaaSActionItem extends SaaSInteractionSpec {
+  type?: '' | 'danger' | 'info' | 'primary' | 'success' | 'warning';
+}
+
+interface SaaSSupportAction extends SaaSInteractionSpec {
+  route?: string;
+  type: 'drawer' | 'hidden-route';
+}
+
+interface SaaSPageMeta {
+  actions: readonly SaaSActionItem[];
+  columns: readonly SaaSColumnItem[];
+  description: string;
+  documentNotes?: readonly string[];
+  exceptions?: readonly string[];
+  fields?: readonly SaaSFieldItem[];
+  filters: readonly SaaSFilterField[];
+  pageGoal: string;
+  pendingItems?: readonly string[];
+  permissionPoints?: readonly string[];
+  processSteps?: readonly string[];
+  rowActions: readonly SaaSActionItem[];
+  sampleData: readonly Record<string, string>[];
+  statusTransitions?: readonly SaaSStatusTransitionItem[];
+  supportActions?: readonly SaaSSupportAction[];
+}
+
+type FieldValue = boolean | number | string | string[];
+
+type FieldOption = { label: string; value: boolean | number | string };
+
+interface BaseFieldInput {
+  defaultValue?: FieldValue;
+  field: string;
+  label: string;
+  required?: boolean;
+}
+
+interface BaseActionFieldInput extends BaseFieldInput {
+  note: string;
+}
+
+interface BaseFilterInput extends BaseFieldInput {
+  placeholder?: string;
+}
+
+function createPasswordField(input: BaseActionFieldInput): SaaSFieldItem {
+  return {
+    ...input,
+    inputType: 'password',
+  };
+}
+
+function createSelectField(
+  input: BaseActionFieldInput & {
+    options: readonly FieldOption[];
+  },
+): SaaSFieldItem {
+  return {
+    ...input,
+    inputType: 'select',
+  };
+}
+
+function createSelectFilter(
+  input: BaseFilterInput & {
+    options: readonly FieldOption[];
+  },
+): SaaSFilterField {
+  return {
+    ...input,
+    inputType: 'select',
+    placeholder: input.placeholder ?? `请选择${input.label}`,
+  };
+}
+
+function createTextareaField(
+  input: BaseActionFieldInput & {
+    rows?: number;
+  },
+): SaaSFieldItem {
+  return {
+    ...input,
+    inputType: 'textarea',
+  };
+}
+
+function createTextField(input: BaseActionFieldInput): SaaSFieldItem {
+  return {
+    ...input,
+    inputType: 'text',
+  };
+}
+
+function createTextFilter(input: BaseFilterInput): SaaSFilterField {
+  return {
+    ...input,
+    inputType: 'text',
+    placeholder: input.placeholder ?? `请输入${input.label}`,
+  };
+}
+
+const sampleTenantOptions = [
+  { label: '星河票务集团', value: '星河票务集团' },
+  { label: '海岸线文旅', value: '海岸线文旅' },
+] as const;
+
+const storeStatusOptions = [
+  { label: '启用', value: '启用' },
+  { label: '停用', value: '停用' },
+  { label: '过期', value: '过期' },
+] as const;
+
+const storeTypeOptions = [
+  { label: '景区门店', value: '景区门店' },
+  { label: '零售门店', value: '零售门店' },
+] as const;
 
 type PageInteractions = Pick<
   SaaSPageMeta,
@@ -67,7 +223,7 @@ type PageExplanations = Pick<
 
 type InteractionItem = SaaSActionItem;
 type FormFieldItem = SaaSFieldItem | SaaSFilterField;
-type StoreStatus = '停用' | '正常' | '注销' | '过期';
+type StoreStatus = '停用' | '启用' | '过期';
 
 interface StoreRecord {
   address: string;
@@ -110,19 +266,32 @@ const actionCatalog = computed<InteractionItem[]>(() => [
   ...interactions.actions,
   ...interactions.rowActions,
 ]);
-const activeInteraction = computed(() =>
-  actionCatalog.value.find((item) => item.label === activeAction.value),
-);
 const selectedStore = computed(
   () =>
     storeData.value.find((item) => item.id === selectedStoreId.value) ?? null,
 );
+const activeInteraction = computed(() => {
+  const baseAction = actionCatalog.value.find(
+    (item) =>
+      item.label ===
+      (activeAction.value === '启用' ? '停用' : activeAction.value),
+  );
+
+  if (!baseAction) {
+    return undefined;
+  }
+
+  if (activeAction.value === '启用') {
+    return createStoreStatusAction(baseAction, '停用');
+  }
+
+  return baseAction;
+});
 const isCreateMode = computed(() => activeAction.value === '新建门店');
 const isViewMode = computed(() => activeAction.value === '查看详情');
 const isSwitchVersionMode = computed(() => activeAction.value === '切换版本');
 const isDisableMode = computed(() => activeAction.value === '停用');
-const isRestoreMode = computed(() => activeAction.value === '恢复门店');
-const isCancelMode = computed(() => activeAction.value === '注销门店');
+const isEnableMode = computed(() => activeAction.value === '启用');
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
@@ -134,8 +303,7 @@ const showSubmitButton = computed(
     isCreateMode.value ||
     isSwitchVersionMode.value ||
     isDisableMode.value ||
-    isRestoreMode.value ||
-    isCancelMode.value,
+    isEnableMode.value,
 );
 const submitButtonText = computed(() => {
   if (isSwitchVersionMode.value) {
@@ -144,11 +312,8 @@ const submitButtonText = computed(() => {
   if (isDisableMode.value) {
     return '确认停用';
   }
-  if (isRestoreMode.value) {
-    return '确认恢复';
-  }
-  if (isCancelMode.value) {
-    return '确认注销';
+  if (isEnableMode.value) {
+    return '确认启用';
   }
   return '保存';
 });
@@ -409,7 +574,7 @@ function normalizeStoreRecord(record: Record<string, string>): StoreRecord {
     id: record.id ?? `store-${Math.random().toString(36).slice(2, 10)}`,
     managerPhone: record.managerPhone ?? '',
     managerUsername: record.managerUsername ?? record.managerPhone ?? '',
-    status: (record.status as StoreStatus) || '正常',
+    status: (record.status as StoreStatus) || '启用',
     storeName: record.storeName ?? '',
     storeType: record.storeType ?? '',
     tenantName: record.tenantName ?? '',
@@ -427,10 +592,8 @@ function getCellValue(row: StoreRecord, key: string) {
 
 function getStatusTagType(status: StoreStatus) {
   switch (status) {
-    case '正常':
+    case '启用':
       return 'success';
-    case '注销':
-      return 'info';
     case '过期':
       return 'warning';
     case '停用':
@@ -447,7 +610,42 @@ function openAction(action: InteractionItem, row?: StoreRecord) {
 }
 
 function handleRowAction(action: InteractionItem, row: Record<string, any>) {
-  openAction(action, getStoreRow(row));
+  const storeRow = getStoreRow(row);
+  openAction(createStoreStatusAction(action, storeRow.status), storeRow);
+}
+
+function createStoreStatusAction(
+  action: InteractionItem,
+  status: StoreStatus,
+): InteractionItem {
+  if (action.label !== '停用') {
+    return action;
+  }
+
+  if (status !== '启用') {
+    return {
+      ...action,
+      description: '启用后，门店将继续使用业务能力。',
+      goal: '启用门店继续使用业务能力。',
+      label: '启用',
+      permissionPoints: ['启用'],
+      type: 'success',
+    };
+  }
+
+  return action;
+}
+
+function getToggleActionLabel(action: InteractionItem, row: StoreRecord) {
+  if (action.label !== '停用') {
+    return action.label;
+  }
+
+  return row.status === '启用' ? '停用' : '启用';
+}
+
+function getToggleActionType(action: InteractionItem, row: StoreRecord) {
+  return createStoreStatusAction(action, row.status).type || 'primary';
 }
 
 function closeDetailDrawer() {
@@ -528,7 +726,7 @@ async function createStore(values: Record<string, any>) {
     id: `store-${Date.now()}`,
     managerPhone,
     managerUsername,
-    status: '正常',
+    status: '启用',
     storeName,
     storeType,
     tenantName,
@@ -573,12 +771,6 @@ async function disableStore() {
     return;
   }
 
-  if (selectedStore.value.status === '注销') {
-    ElMessage.warning('已注销门店不能再执行停用');
-    closeDetailDrawer();
-    return;
-  }
-
   updateStoreRecord(selectedStore.value.id, {
     status: '停用',
   });
@@ -586,35 +778,22 @@ async function disableStore() {
   closeDetailDrawer();
 }
 
-async function restoreStore() {
+async function enableStore() {
   if (!selectedStore.value) {
     ElMessage.warning('未找到当前门店，请重新选择');
     return;
   }
 
-  if (selectedStore.value.status === '注销') {
-    ElMessage.warning('已注销门店不能恢复');
+  if (selectedStore.value.status === '启用') {
+    ElMessage.info('当前门店已是启用状态');
     closeDetailDrawer();
     return;
   }
 
   updateStoreRecord(selectedStore.value.id, {
-    status: '正常',
+    status: '启用',
   });
-  ElMessage.success(`已恢复门店：${selectedStore.value.storeName}`);
-  closeDetailDrawer();
-}
-
-async function cancelStore() {
-  if (!selectedStore.value) {
-    ElMessage.warning('未找到当前门店，请重新选择');
-    return;
-  }
-
-  updateStoreRecord(selectedStore.value.id, {
-    status: '注销',
-  });
-  ElMessage.success(`已注销门店：${selectedStore.value.storeName}`);
+  ElMessage.success(`已启用门店：${selectedStore.value.storeName}`);
   closeDetailDrawer();
 }
 
@@ -635,13 +814,8 @@ async function submitActiveAction() {
     return;
   }
 
-  if (isRestoreMode.value) {
-    await restoreStore();
-    return;
-  }
-
-  if (isCancelMode.value) {
-    await cancelStore();
+  if (isEnableMode.value) {
+    await enableStore();
     return;
   }
 
@@ -738,11 +912,11 @@ function createInteractions(): PageInteractions {
     ],
     columns: [
       { key: 'storeName', label: '门店名称' },
-      { key: 'tenantName', label: '所属租户' },
       { key: 'storeType', label: '门店类型' },
       { key: 'version', label: '门店版本' },
       { key: 'status', label: '门店状态' },
       { key: 'managerPhone', label: '管理员手机号' },
+      { key: 'tenantName', label: '所属租户' },
     ],
     filters: [
       createTextFilter({
@@ -806,20 +980,6 @@ function createInteractions(): PageInteractions {
         goal: '停止门店继续使用业务能力。',
         permissionPoints: ['停用'],
       },
-      {
-        label: '恢复门店',
-        type: 'success',
-        description: '将停用或过期门店恢复到正常状态。',
-        goal: '恢复门店正常使用。',
-        permissionPoints: ['恢复'],
-      },
-      {
-        label: '注销门店',
-        type: 'danger',
-        description: '注销后门店不可恢复，请谨慎操作。',
-        goal: '彻底终止门店使用。',
-        permissionPoints: ['注销'],
-      },
     ],
     sampleData: [
       {
@@ -829,7 +989,7 @@ function createInteractions(): PageInteractions {
         id: 'store-001',
         managerPhone: '13600009999',
         managerUsername: 'happy_valley_east',
-        status: '正常',
+        status: '启用',
         storeName: '欢乐谷东区店',
         storeType: '景区门店',
         tenantName: '星河票务集团',
@@ -869,16 +1029,16 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理门店基础信息、管理员账号、版本和状态，覆盖新建、查看详情、切换版本、停用、恢复和注销等核心动作。',
+      '管理门店基础信息、管理员账号、版本和状态，覆盖新建、查看详情、切换版本、停用和启用等核心动作。',
     documentNotes: [
       '门店类型创建成功后不可修改。',
       '版本切换后，能力边界会立即按新版本生效。',
-      '注销门店属于不可逆操作，应谨慎执行。',
+      '停用门店后，门店业务能力将暂停使用；重新启用后可继续使用。',
     ],
     exceptions: [
       '门店名称或管理员手机号重复时，不允许创建。',
-      '已注销门店不能恢复或继续停用。',
       '停用门店前需确认该门店当前允许暂停运营。',
+      '启用门店前需确认该门店已满足继续使用条件。',
     ],
     fields: [
       { label: '所属租户', note: '门店归属的 SaaS 租户主体', required: true },
@@ -890,46 +1050,40 @@ function createExplanations(): PageExplanations {
       { label: '门店名称', note: '门店展示名称', required: true },
       { label: '地址', note: '门店对外展示地址', required: true },
       { label: '管理员手机号', note: '门店管理员登录手机号', required: true },
-      { label: '门店状态', note: '正常、停用、过期或注销' },
+      { label: '门店状态', note: '启用、停用或过期' },
     ],
     pageGoal: '查看与筛选门店，并完成门店生命周期内的关键管理动作。',
-    permissionPoints: ['查看', '新建', '切换版本', '停用', '恢复', '注销'],
+    permissionPoints: ['查看', '新建', '切换版本', '停用', '启用'],
     processSteps: [
       '通过门店名称、所属租户、门店类型和状态筛选目标门店。',
-      '从列表进入查看详情、切换版本、停用、恢复或注销动作。',
+      '从列表进入查看详情、切换版本、停用或启用动作。',
       '在抽屉中完成表单填写或确认操作。',
       '提交后即时刷新门店状态与版本信息。',
     ],
     statusTransitions: [
       {
-        current: '正常',
+        current: '启用',
         note: '由平台手动触发停用。',
         target: '停用',
         trigger: '停用',
       },
       {
-        current: '正常',
+        current: '启用',
         note: '权益到期后系统自动置为过期。',
         target: '过期',
         trigger: '权益到期',
       },
       {
         current: '停用',
-        note: '恢复后重新进入正常状态。',
-        target: '正常',
-        trigger: '恢复门店',
+        note: '启用后重新进入可用状态。',
+        target: '启用',
+        trigger: '启用',
       },
       {
         current: '过期',
-        note: '处理续费或恢复后重新启用。',
-        target: '正常',
-        trigger: '恢复门店',
-      },
-      {
-        current: '正常 / 停用 / 过期',
-        note: '注销后不可恢复。',
-        target: '注销',
-        trigger: '注销门店',
+        note: '处理续费后可重新启用。',
+        target: '启用',
+        trigger: '启用',
       },
     ],
   };
@@ -937,7 +1091,7 @@ function createExplanations(): PageExplanations {
 </script>
 
 <template>
-  <Page :description="explanations.description" :title="pageTitle">
+  <Page :title="pageTitle">
     <template #title>
       <div class="mb-2 flex items-center gap-3">
         <div class="text-lg font-semibold">
@@ -993,16 +1147,10 @@ function createExplanations(): PageExplanations {
                   v-for="action in interactions.rowActions"
                   :key="action.label"
                   link
-                  :disabled="
-                    (action.label === '停用' &&
-                      getStoreRow(row).status === '注销') ||
-                    (action.label === '恢复门店' &&
-                      getStoreRow(row).status === '注销')
-                  "
-                  :type="action.type || 'primary'"
+                  :type="getToggleActionType(action, getStoreRow(row))"
                   @click="handleRowAction(action, row)"
                 >
-                  {{ action.label }}
+                  {{ getToggleActionLabel(action, getStoreRow(row)) }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1236,9 +1384,7 @@ function createExplanations(): PageExplanations {
       </div>
 
       <div
-        v-else-if="
-          (isDisableMode || isRestoreMode || isCancelMode) && selectedStore
-        "
+        v-else-if="(isDisableMode || isEnableMode) && selectedStore"
         class="flex flex-col gap-4"
       >
         <div class="drawer-warning-card">
@@ -1246,9 +1392,7 @@ function createExplanations(): PageExplanations {
             {{
               isDisableMode
                 ? '停用后门店将暂停使用业务能力'
-                : isRestoreMode
-                  ? '恢复后门店将重新回到正常使用状态'
-                  : '注销后门店不可恢复，请谨慎确认'
+                : '启用后门店将继续使用业务能力'
             }}
           </div>
           <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">

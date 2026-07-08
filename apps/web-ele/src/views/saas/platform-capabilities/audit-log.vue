@@ -1,11 +1,4 @@
 <script lang="ts" setup>
-import type {
-  SaaSActionItem,
-  SaaSFieldItem,
-  SaaSFilterField,
-  SaaSPageMeta,
-} from '../_shared/page-meta';
-
 import type { VbenFormSchema } from '#/adapter/form';
 
 import { computed, ref } from 'vue';
@@ -28,8 +21,138 @@ import {
 
 import { useVbenForm } from '#/adapter/form';
 
-import { createSelectFilter, createTextFilter } from '../_shared/field-factory';
-import { auditModuleOptions, auditRiskLevelOptions } from '../_shared/options';
+interface SaaSFilterField {
+  defaultValue?: boolean | number | string | string[];
+  field?: string;
+  inputType?:
+    | 'date'
+    | 'daterange'
+    | 'password'
+    | 'select'
+    | 'switch'
+    | 'text'
+    | 'textarea';
+  label: string;
+  options?: readonly { label: string; value: boolean | number | string }[];
+  placeholder: string;
+  required?: boolean;
+  rows?: number;
+}
+
+interface SaaSColumnItem {
+  key: string;
+  label: string;
+}
+
+interface SaaSFieldItem {
+  defaultValue?: boolean | number | string | string[];
+  field?: string;
+  inputType?:
+    | 'date'
+    | 'daterange'
+    | 'password'
+    | 'select'
+    | 'switch'
+    | 'text'
+    | 'textarea';
+  label: string;
+  note: string;
+  options?: readonly { label: string; value: boolean | number | string }[];
+  rows?: number;
+  required?: boolean;
+}
+
+interface SaaSStatusTransitionItem {
+  current: string;
+  note: string;
+  target: string;
+  trigger: string;
+}
+
+interface SaaSInteractionSpec {
+  label: string;
+  description?: string;
+  documentNotes?: readonly string[];
+  fields?: readonly SaaSFieldItem[];
+  goal?: string;
+  permissionPoints?: readonly string[];
+  processSteps?: readonly string[];
+  statusTransitions?: readonly SaaSStatusTransitionItem[];
+}
+
+interface SaaSActionItem extends SaaSInteractionSpec {
+  type?: '' | 'danger' | 'info' | 'primary' | 'success' | 'warning';
+}
+
+interface SaaSSupportAction extends SaaSInteractionSpec {
+  route?: string;
+  type: 'drawer' | 'hidden-route';
+}
+
+interface SaaSPageMeta {
+  actions: readonly SaaSActionItem[];
+  columns: readonly SaaSColumnItem[];
+  description: string;
+  documentNotes?: readonly string[];
+  exceptions?: readonly string[];
+  fields?: readonly SaaSFieldItem[];
+  filters: readonly SaaSFilterField[];
+  pageGoal: string;
+  pendingItems?: readonly string[];
+  permissionPoints?: readonly string[];
+  processSteps?: readonly string[];
+  rowActions: readonly SaaSActionItem[];
+  sampleData: readonly Record<string, string>[];
+  statusTransitions?: readonly SaaSStatusTransitionItem[];
+  supportActions?: readonly SaaSSupportAction[];
+}
+
+type FieldValue = boolean | number | string | string[];
+
+type FieldOption = { label: string; value: boolean | number | string };
+
+interface BaseFieldInput {
+  defaultValue?: FieldValue;
+  field: string;
+  label: string;
+  required?: boolean;
+}
+
+interface BaseFilterInput extends BaseFieldInput {
+  placeholder?: string;
+}
+
+function createSelectFilter(
+  input: BaseFilterInput & {
+    options: readonly FieldOption[];
+  },
+): SaaSFilterField {
+  return {
+    ...input,
+    inputType: 'select',
+    placeholder: input.placeholder ?? `请选择${input.label}`,
+  };
+}
+
+function createTextFilter(input: BaseFilterInput): SaaSFilterField {
+  return {
+    ...input,
+    inputType: 'text',
+    placeholder: input.placeholder ?? `请输入${input.label}`,
+  };
+}
+
+const auditModuleOptions = [
+  { label: '门店版本管理', value: '门店版本管理' },
+  { label: '门店权益管理', value: '门店权益管理' },
+  { label: '员工账号管理', value: '员工账号管理' },
+] as const;
+
+const auditRiskLevelOptions = [
+  { label: '高', value: '高' },
+  { label: '中', value: '中' },
+  { label: '低', value: '低' },
+] as const;
 
 type PageInteractions = Pick<
   SaaSPageMeta,
@@ -385,7 +508,7 @@ function createExplanations(): PageExplanations {
 </script>
 
 <template>
-  <Page :description="explanations.description" :title="pageTitle">
+  <Page :title="pageTitle">
     <template #title>
       <div class="mb-2 flex items-center gap-3">
         <div class="text-lg font-semibold">
