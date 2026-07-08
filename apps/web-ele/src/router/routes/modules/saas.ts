@@ -83,53 +83,6 @@ const routes: RouteRecordRaw[] = [
       },
       {
         meta: {
-          icon: 'lucide:user-cog',
-          order: 2,
-          title: '系统用户管理',
-        },
-        name: 'SaaSSystemUserManagement',
-        path: 'system-user-management',
-        children: [
-          {
-            component: () =>
-              import('#/views/saas/system-user-management/employee-account-management.vue'),
-            meta: {
-              description: '管理SaaS内部员工',
-              icon: 'lucide:user-round-pen',
-              priority: 'P1',
-              title: '员工账号管理',
-            },
-            name: 'SaaSEmployeeAccountManagement',
-            path: 'employee-account-management',
-          },
-          {
-            component: () =>
-              import('#/views/saas/system-user-management/function-permission-management.vue'),
-            meta: {
-              description: '管理功能级权限',
-              icon: 'lucide:key-round',
-              priority: 'P1',
-              title: '功能权限管理',
-            },
-            name: 'SaaSFunctionPermissionManagement',
-            path: 'function-permission-management',
-          },
-          {
-            component: () =>
-              import('#/views/saas/system-user-management/department-management.vue'),
-            meta: {
-              description: '管理组织归属',
-              icon: 'lucide:network',
-              priority: 'P1',
-              title: '部门管理',
-            },
-            name: 'SaaSDepartmentManagement',
-            path: 'department-management',
-          },
-        ],
-      },
-      {
-        meta: {
           icon: 'lucide:app-window',
           order: 3,
           title: '应用管理',
@@ -301,6 +254,53 @@ const routes: RouteRecordRaw[] = [
             },
             name: 'SaaSMessageNotification',
             path: 'message-notification',
+          },
+        ],
+      },
+      {
+        meta: {
+          icon: 'lucide:user-cog',
+          order: 7,
+          title: 'SaaS用户管理',
+        },
+        name: 'SaaSSystemUserManagement',
+        path: 'system-user-management',
+        children: [
+          {
+            component: () =>
+              import('#/views/saas/system-user-management/employee-account-management.vue'),
+            meta: {
+              description: '管理SaaS内部员工',
+              icon: 'lucide:user-round-pen',
+              priority: 'P1',
+              title: '员工账号管理',
+            },
+            name: 'SaaSEmployeeAccountManagement',
+            path: 'employee-account-management',
+          },
+          {
+            component: () =>
+              import('#/views/saas/system-user-management/function-permission-management.vue'),
+            meta: {
+              description: '管理功能级权限',
+              icon: 'lucide:key-round',
+              priority: 'P1',
+              title: '功能权限管理',
+            },
+            name: 'SaaSFunctionPermissionManagement',
+            path: 'function-permission-management',
+          },
+          {
+            component: () =>
+              import('#/views/saas/system-user-management/department-management.vue'),
+            meta: {
+              description: '管理组织归属',
+              icon: 'lucide:network',
+              priority: 'P1',
+              title: '部门管理',
+            },
+            name: 'SaaSDepartmentManagement',
+            path: 'department-management',
           },
         ],
       },

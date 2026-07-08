@@ -68,7 +68,10 @@ export const notificationTargetOptions = [
 export const combinedAnnouncementTargetOptions = [
   { label: '租户管理员', value: '租户管理员' },
   { label: '门店管理员', value: '门店管理员' },
-  { label: '租户管理员 / 门店管理员', value: '租户管理员 / 门店管理员' },
+  {
+    label: '租户管理员 / 门店管理员',
+    value: '租户管理员 / 门店管理员',
+  },
 ] as const;
 
 export const popupTargetOptions = [
