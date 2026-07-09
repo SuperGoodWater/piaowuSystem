@@ -1145,7 +1145,7 @@ function createExplanations(): PageExplanations {
             </template>
           </ElTable.TableColumn>
 
-          <ElTable.TableColumn label="操作" fixed="right" min-width="320">
+          <ElTable.TableColumn label="操作" fixed="right" min-width="150">
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
@@ -1649,10 +1649,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }

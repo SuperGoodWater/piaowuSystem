@@ -173,6 +173,8 @@ const filterState = ref({
   status: '',
 });
 const pageSize = ref(10);
+const maintenanceConfirmPassword = ref('');
+const maintenancePassword = ref('');
 const selectedTenantId = ref('');
 const tenantData = ref<TenantRecord[]>(
   interactions.sampleData.map((item) => normalizeTenantRecord(item)),
@@ -190,46 +192,22 @@ const selectedTenant = computed(
 );
 const activeInteraction = computed(() => {
   const baseAction = actionCatalog.value.find(
-    (item) =>
-      item.label ===
-      (activeAction.value === '启用' ? '停用' : activeAction.value),
+    (item) => item.label === activeAction.value,
   );
 
   if (!baseAction) {
     return undefined;
   }
 
-  if (activeAction.value === '启用') {
-    return createTenantStatusAction(baseAction, '停用');
-  }
-
   return baseAction;
 });
 const isCreateMode = computed(() => activeAction.value === '新建租户');
-const isViewMode = computed(() => activeAction.value === '查看详情');
-const isResetPasswordMode = computed(() => activeAction.value === '重置密码');
-const isToggleStatusMode = computed(
-  () => activeAction.value === '停用' || activeAction.value === '启用',
-);
+const isMaintenanceMode = computed(() => activeAction.value === '维护');
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
-const showResetButton = computed(
-  () => isCreateMode.value || isResetPasswordMode.value,
-);
-const showSubmitButton = computed(
-  () =>
-    isCreateMode.value || isResetPasswordMode.value || isToggleStatusMode.value,
-);
-const submitButtonText = computed(() => {
-  if (isToggleStatusMode.value) {
-    return activeAction.value === '启用' ? '确认启用' : '确认停用';
-  }
-  if (isResetPasswordMode.value) {
-    return '确认重置';
-  }
-  return '保存';
-});
+const showResetButton = computed(() => isCreateMode.value);
+const showSubmitButton = computed(() => isCreateMode.value);
 const filteredTenants = computed(() => {
   const keyword = filterState.value.keyword.trim().toLowerCase();
   const status = filterState.value.status;
@@ -471,44 +449,15 @@ function getTenantRow(row: Record<string, any>) {
   return row as TenantRecord;
 }
 
-function createTenantStatusAction(
-  action: InteractionItem,
-  status: TenantStatus,
-): InteractionItem {
-  if (action.label !== '停用') {
-    return action;
-  }
-
-  if (status === '停用') {
-    return {
-      ...action,
-      description: '启用后，当前租户下的门店和员工将恢复正常使用。',
-      documentNotes: ['启用前应确认当前租户及其门店已满足恢复使用条件。'],
-      goal: '恢复当前租户继续使用 SaaS 平台。',
-      label: '启用',
-      permissionPoints: ['启用'],
-      type: 'success',
-    };
-  }
-
-  return action;
-}
-
-function getToggleActionLabel(row: TenantRecord) {
-  return row.status === '停用' ? '启用' : '停用';
-}
-
-function getToggleActionType(action: InteractionItem, row: TenantRecord) {
-  return createTenantStatusAction(action, row.status).type || 'primary';
-}
-
 function handleRowAction(action: InteractionItem, row: Record<string, any>) {
   const tenantRow = getTenantRow(row);
-  openAction(createTenantStatusAction(action, tenantRow.status), tenantRow);
+  openAction(action, tenantRow);
 }
 
 function openAction(action: InteractionItem, row?: TenantRecord) {
   activeAction.value = action.label;
+  maintenanceConfirmPassword.value = '';
+  maintenancePassword.value = '';
   selectedTenantId.value = row?.id ?? '';
   applyInteractionForm(action);
   detailVisible.value = true;
@@ -592,14 +541,14 @@ async function createTenant(values: Record<string, any>) {
   closeDetailDrawer();
 }
 
-async function resetTenantPassword(values: Record<string, any>) {
+function resetMaintenancePassword() {
   if (!selectedTenant.value) {
     ElMessage.warning('未找到当前租户，请重新选择');
     return;
   }
 
-  const password = String(values.password ?? '').trim();
-  const confirmPassword = String(values.confirmPassword ?? '').trim();
+  const password = maintenancePassword.value.trim();
+  const confirmPassword = maintenanceConfirmPassword.value.trim();
 
   if (!password || !confirmPassword) {
     ElMessage.warning('请填写完整的新密码信息');
@@ -615,10 +564,11 @@ async function resetTenantPassword(values: Record<string, any>) {
     passwordUpdatedAt: getCurrentDateTime(),
   });
   ElMessage.success(`已重置 ${selectedTenant.value.tenantName} 的管理员密码`);
-  closeDetailDrawer();
+  maintenanceConfirmPassword.value = '';
+  maintenancePassword.value = '';
 }
 
-async function toggleTenantStatus() {
+function toggleMaintenanceStatus() {
   if (!selectedTenant.value) {
     ElMessage.warning('未找到当前租户，请重新选择');
     return;
@@ -631,26 +581,29 @@ async function toggleTenantStatus() {
     status: nextStatus,
   });
   ElMessage.success(`已${nextStatus}租户：${selectedTenant.value.tenantName}`);
-  closeDetailDrawer();
+}
+
+function getMaintenanceStatusButtonText(status: TenantStatus) {
+  return status === '启用' ? '停用租户' : '启用租户';
+}
+
+function getMaintenanceStatusButtonType(status: TenantStatus) {
+  return status === '启用' ? 'danger' : 'success';
+}
+
+function getMaintenanceStatusTip(status: TenantStatus) {
+  return status === '启用'
+    ? '停用后，当前租户下的门店和员工登录将同步受限。'
+    : '启用后，当前租户下的门店和员工将恢复正常使用。';
 }
 
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
     await createTenant(values);
-    return;
-  }
-
-  if (isResetPasswordMode.value) {
-    await resetTenantPassword(values);
   }
 }
 
 async function submitActiveAction() {
-  if (isToggleStatusMode.value) {
-    await toggleTenantStatus();
-    return;
-  }
-
   await detailActionFormApi.validateAndSubmitForm();
 }
 
@@ -667,6 +620,8 @@ watch(detailVisible, (visible) => {
   if (!visible) {
     activeAction.value = '';
     detailExplanationVisible.value = false;
+    maintenanceConfirmPassword.value = '';
+    maintenancePassword.value = '';
     selectedTenantId.value = '';
     applyInteractionForm();
   }
@@ -724,46 +679,15 @@ function createInteractions(): PageInteractions {
     ],
     rowActions: [
       {
-        label: '查看详情',
-        description: '查看当前租户的基础信息、管理员账号和最近操作信息。',
-        goal: '快速了解租户当前配置与使用状态。',
-        permissionPoints: ['查看'],
-      },
-      {
-        label: '重置密码',
-        type: 'warning',
-        description: '重置租户顶级管理员密码，不影响租户状态。',
-        fields: [
-          createPasswordField({
-            field: 'password',
-            label: '新密码',
-            note: '请输入新的管理员登录密码',
-            required: true,
-          }),
-          createPasswordField({
-            field: 'confirmPassword',
-            label: '确认密码',
-            note: '再次输入新密码，需与上方保持一致',
-            required: true,
-          }),
-        ],
-        goal: '恢复管理员账号的登录能力。',
-        permissionPoints: ['重置密码'],
+        label: '维护',
+        description: '维护当前租户的基础信息、管理员密码和租户状态。',
+        goal: '集中维护租户当前配置与使用状态。',
+        permissionPoints: ['查看', '重置密码', '停用', '启用'],
         processSteps: [
-          '输入新密码和确认密码。',
-          '系统校验两次输入是否一致。',
-          '提交成功后更新该租户最近重置密码时间。',
+          '进入维护抽屉。',
+          '查看租户基础信息和管理员账号。',
+          '按需重置管理员密码，或处理租户停用和启用。',
         ],
-      },
-      {
-        label: '停用',
-        type: 'danger',
-        description: '停用后，当前租户下的门店和员工将同步受到影响。',
-        documentNotes: [
-          '停用属于高影响动作，应确认当前租户及其门店均允许暂停使用。',
-        ],
-        goal: '停止当前租户继续使用 SaaS 平台。',
-        permissionPoints: ['停用'],
       },
     ],
     sampleData: [
@@ -808,7 +732,7 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理租户与顶级管理员账号，覆盖搜索、新建、查看详情、重置密码和停用等核心动作。',
+      '管理租户与顶级管理员账号，覆盖搜索、新建、维护、重置密码、停用和启用等核心动作。',
     documentNotes: [
       '关键词搜索统一覆盖租户名称、管理员账号和手机号。',
       '停用租户后，相关门店与员工账号会同步受到影响，应在执行前明确业务确认。',
@@ -838,8 +762,8 @@ function createExplanations(): PageExplanations {
     permissionPoints: ['查看', '新建', '重置密码', '停用', '启用'],
     processSteps: [
       '通过关键词或状态筛选需要处理的租户。',
-      '从列表进入新建、详情、重置密码或停用动作。',
-      '在抽屉内完成表单填写或确认操作。',
+      '从列表进入新建或维护动作。',
+      '在维护抽屉中查看详情、重置密码，并处理租户停用或启用。',
       '提交后即时刷新当前列表数据与状态。',
     ],
     statusTransitions: [
@@ -943,25 +867,17 @@ function createExplanations(): PageExplanations {
             </template>
           </ElTable.TableColumn>
 
-          <ElTable.TableColumn label="操作" fixed="right" min-width="240">
+          <ElTable.TableColumn label="操作" fixed="right" min-width="150">
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
                   v-for="action in interactions.rowActions"
                   :key="action.label"
                   link
-                  :type="
-                    action.label === '停用'
-                      ? getToggleActionType(action, getTenantRow(row))
-                      : action.type || 'primary'
-                  "
+                  :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
-                  {{
-                    action.label === '停用'
-                      ? getToggleActionLabel(getTenantRow(row))
-                      : action.label
-                  }}
+                  {{ action.label }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1151,7 +1067,10 @@ function createExplanations(): PageExplanations {
         </div>
       </template>
 
-      <div v-if="isViewMode && selectedTenant" class="flex flex-col gap-4">
+      <div
+        v-if="isMaintenanceMode && selectedTenant"
+        class="flex flex-col gap-4"
+      >
         <div class="drawer-summary-card">
           <div class="text-sm font-medium text-[var(--el-text-color-primary)]">
             当前租户
@@ -1167,6 +1086,9 @@ function createExplanations(): PageExplanations {
         </div>
 
         <ElDescriptions :column="1" border>
+          <ElDescriptionsItem label="租户名称">
+            {{ selectedTenant.tenantName }}
+          </ElDescriptionsItem>
           <ElDescriptionsItem label="管理员账号">
             {{ selectedTenant.username }}
           </ElDescriptionsItem>
@@ -1186,52 +1108,50 @@ function createExplanations(): PageExplanations {
             {{ selectedTenant.passwordUpdatedAt }}
           </ElDescriptionsItem>
         </ElDescriptions>
-      </div>
 
-      <div
-        v-else-if="isToggleStatusMode && selectedTenant"
-        class="flex flex-col gap-4"
-      >
-        <div class="drawer-warning-card">
-          <div
-            class="text-sm font-medium"
-            :class="
-              activeAction === '启用'
-                ? 'text-[var(--el-color-success)]'
-                : 'text-[var(--el-color-danger)]'
-            "
-          >
-            {{
-              activeAction === '启用'
-                ? '启用后该租户下的门店和员工将恢复正常登录'
-                : '停用后将同步影响该租户下的门店和员工登录'
-            }}
+        <div class="drawer-section-card">
+          <div class="text-sm font-medium">重置管理员密码</div>
+          <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <ElInput
+              v-model="maintenancePassword"
+              placeholder="请输入新密码"
+              show-password
+              type="password"
+            />
+            <ElInput
+              v-model="maintenanceConfirmPassword"
+              placeholder="请再次输入新密码"
+              show-password
+              type="password"
+            />
           </div>
           <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
-            {{
-              activeAction === '启用'
-                ? '请确认当前租户已满足恢复使用条件，再点击底部“确认启用”。'
-                : '请确认当前操作对象无误，再点击底部“确认停用”。'
-            }}
+            重置后会更新该租户最近重置密码时间。
+          </div>
+          <div class="mt-3">
+            <ElButton type="warning" @click="resetMaintenancePassword">
+              确认重置
+            </ElButton>
           </div>
         </div>
 
-        <ElDescriptions :column="1" border>
-          <ElDescriptionsItem label="租户名称">
-            {{ selectedTenant.tenantName }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="管理员账号">
-            {{ selectedTenant.username }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="手机号">
-            {{ selectedTenant.phone }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="当前状态">
+        <div class="drawer-section-card">
+          <div class="text-sm font-medium">租户状态</div>
+          <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
+            {{ getMaintenanceStatusTip(selectedTenant.status) }}
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-3">
             <ElTag :type="getStatusTagType(selectedTenant.status)">
               {{ selectedTenant.status }}
             </ElTag>
-          </ElDescriptionsItem>
-        </ElDescriptions>
+            <ElButton
+              :type="getMaintenanceStatusButtonType(selectedTenant.status)"
+              @click="toggleMaintenanceStatus"
+            >
+              {{ getMaintenanceStatusButtonText(selectedTenant.status) }}
+            </ElButton>
+          </div>
+        </div>
       </div>
 
       <div v-else-if="hasActionFields" class="flex flex-col gap-4">
@@ -1256,7 +1176,7 @@ function createExplanations(): PageExplanations {
             type="primary"
             @click="submitActiveAction"
           >
-            {{ submitButtonText }}
+            保存
           </ElButton>
         </div>
       </template>
@@ -1395,10 +1315,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }
@@ -1463,16 +1382,11 @@ function createExplanations(): PageExplanations {
   border-bottom-color: var(--el-border-color-lighter);
 }
 
-.drawer-summary-card,
-.drawer-warning-card {
+.drawer-section-card,
+.drawer-summary-card {
   border: 1px solid var(--el-border-color-light);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--el-fill-color-lighter);
   padding: 16px;
-}
-
-.drawer-warning-card {
-  border-color: var(--el-color-danger-light-5);
-  background: var(--el-color-danger-light-9);
 }
 </style>
