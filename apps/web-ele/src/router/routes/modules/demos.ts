@@ -10,44 +10,12 @@ const routes: RouteRecordRaw[] = [
     meta: {
       icon: 'ic:baseline-view-in-ar',
       keepAlive: true,
-      order: 1000,
+      order: 9999,
       title: $t('demos.title'),
     },
     name: 'Demos',
     path: '/demos',
     children: [
-      {
-        meta: {
-          icon: 'lucide:layout-dashboard',
-          order: -1,
-          title: $t('page.dashboard.title'),
-        },
-        name: 'Dashboard',
-        path: '/dashboard',
-        children: [
-          {
-            name: 'Analytics',
-            path: 'analytics',
-            component: () =>
-              import('#/views/demos/dashboard/analytics/index.vue'),
-            meta: {
-              affixTab: true,
-              icon: 'lucide:area-chart',
-              title: $t('page.dashboard.analytics'),
-            },
-          },
-          {
-            name: 'Workspace',
-            path: 'workspace',
-            component: () =>
-              import('#/views/demos/dashboard/workspace/index.vue'),
-            meta: {
-              icon: 'carbon:workspace',
-              title: $t('page.dashboard.workspace'),
-            },
-          },
-        ],
-      },
       {
         meta: {
           title: $t('demos.elementPlus'),

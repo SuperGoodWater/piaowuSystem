@@ -43,9 +43,32 @@ const routes: RouteRecordRaw[] = [
             name: 'SaaSStoreManagement',
             path: 'store-management',
           },
+        ],
+      },
+      {
+        meta: {
+          icon: 'lucide:package-open',
+          order: 3,
+          title: 'SaaS产品管理',
+        },
+        name: 'SaaSProductManagement',
+        path: 'product-management',
+        children: [
           {
             component: () =>
-              import('#/views/saas/customer-management/store-version-management.vue'),
+              import('#/views/saas/product-management/application-list-management.vue'),
+            meta: {
+              description: '管理应用上架、下架、可见性',
+              icon: 'lucide:layout-grid',
+              priority: 'P1',
+              title: '应用列表管理',
+            },
+            name: 'SaaSApplicationListManagement',
+            path: 'application-list-management',
+          },
+          {
+            component: () =>
+              import('#/views/saas/product-management/store-version-management.vue'),
             meta: {
               description: '管理不同门店类型下的版本',
               icon: 'lucide:git-branch-plus',
@@ -57,7 +80,7 @@ const routes: RouteRecordRaw[] = [
           },
           {
             component: () =>
-              import('#/views/saas/customer-management/store-benefit-management.vue'),
+              import('#/views/saas/product-management/store-benefit-management.vue'),
             meta: {
               description: '管理门店权益及有效期',
               icon: 'lucide:badge-check',
@@ -66,41 +89,6 @@ const routes: RouteRecordRaw[] = [
             },
             name: 'SaaSStoreBenefitManagement',
             path: 'store-benefit-management',
-          },
-          {
-            component: () =>
-              import('#/views/saas/customer-management/joint-operation-management.vue'),
-            meta: {
-              description: '管理门店联营关联',
-              icon: 'lucide:handshake',
-              priority: 'P1',
-              title: '联营关系管理',
-            },
-            name: 'SaaSJointOperationManagement',
-            path: 'joint-operation-management',
-          },
-        ],
-      },
-      {
-        meta: {
-          icon: 'lucide:app-window',
-          order: 3,
-          title: '应用管理',
-        },
-        name: 'SaaSApplicationManagement',
-        path: 'application-management',
-        children: [
-          {
-            component: () =>
-              import('#/views/saas/application-management/application-list-management.vue'),
-            meta: {
-              description: '管理应用上架、下架、可见性',
-              icon: 'lucide:layout-grid',
-              priority: 'P1',
-              title: '应用列表管理',
-            },
-            name: 'SaaSApplicationListManagement',
-            path: 'application-list-management',
           },
         ],
       },

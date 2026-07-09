@@ -13,32 +13,19 @@ import {
   ElDialog,
   ElDrawer,
   ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElInput,
   ElMessage,
+  ElOption,
   ElPagination,
+  ElSelect,
   ElSpace,
   ElTable,
   ElTag,
 } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
-
-interface SaaSFilterField {
-  defaultValue?: boolean | number | string | string[];
-  field?: string;
-  inputType?:
-    | 'date'
-    | 'daterange'
-    | 'password'
-    | 'select'
-    | 'switch'
-    | 'text'
-    | 'textarea';
-  label: string;
-  options?: readonly { label: string; value: boolean | number | string }[];
-  placeholder: string;
-  required?: boolean;
-  rows?: number;
-}
 
 interface SaaSColumnItem {
   key: string;
@@ -97,7 +84,6 @@ interface SaaSPageMeta {
   documentNotes?: readonly string[];
   exceptions?: readonly string[];
   fields?: readonly SaaSFieldItem[];
-  filters: readonly SaaSFilterField[];
   pageGoal: string;
   pendingItems?: readonly string[];
   permissionPoints?: readonly string[];
@@ -123,10 +109,6 @@ interface BaseActionFieldInput extends BaseFieldInput {
   note: string;
 }
 
-interface BaseFilterInput extends BaseFieldInput {
-  placeholder?: string;
-}
-
 function createSelectField(
   input: BaseActionFieldInput & {
     options: readonly FieldOption[];
@@ -135,18 +117,6 @@ function createSelectField(
   return {
     ...input,
     inputType: 'select',
-  };
-}
-
-function createSelectFilter(
-  input: BaseFilterInput & {
-    options: readonly FieldOption[];
-  },
-): SaaSFilterField {
-  return {
-    ...input,
-    inputType: 'select',
-    placeholder: input.placeholder ?? `请选择${input.label}`,
   };
 }
 
@@ -161,33 +131,27 @@ function createTextareaField(
   };
 }
 
-function createTextFilter(input: BaseFilterInput): SaaSFilterField {
+function createTextField(input: BaseActionFieldInput): SaaSFieldItem {
   return {
     ...input,
     inputType: 'text',
-    placeholder: input.placeholder ?? `请输入${input.label}`,
   };
 }
 
-const jointOperationStatusOptions = [
-  { label: '已建立', value: '已建立' },
-  { label: '已解除', value: '已解除' },
+const appShelfStatusOptions = [
+  { label: '已上架', value: '已上架' },
+  { label: '已下架', value: '已下架' },
 ] as const;
 
-const sampleStoreOptions = [
-  { label: '欢乐谷东区店', value: '欢乐谷东区店' },
-  { label: '欢乐谷西区店', value: '欢乐谷西区店' },
-  { label: '海岸线游客中心', value: '海岸线游客中心' },
+const appTypeOptions = [
+  { label: '营销应用', value: '营销应用' },
+  { label: '运营应用', value: '运营应用' },
+  { label: '数据应用', value: '数据应用' },
 ] as const;
 
 type PageInteractions = Pick<
   SaaSPageMeta,
-  | 'actions'
-  | 'columns'
-  | 'filters'
-  | 'rowActions'
-  | 'sampleData'
-  | 'supportActions'
+  'actions' | 'columns' | 'rowActions' | 'sampleData' | 'supportActions'
 >;
 type PageExplanations = Pick<
   SaaSPageMeta,
@@ -203,16 +167,16 @@ type PageExplanations = Pick<
 >;
 
 type InteractionItem = SaaSActionItem;
-type FormFieldItem = SaaSFieldItem | SaaSFilterField;
-type JointStatus = '已建立' | '已解除';
+type FormFieldItem = SaaSFieldItem;
+type AppShelfStatus = '已上架' | '已下架';
 
-interface JointOperationRecord {
-  dataScope: string;
+interface AppRecord {
+  appName: string;
+  appType: string;
   id: string;
-  initiatorStore: string;
-  relatedStores: string;
-  status: JointStatus;
+  status: AppShelfStatus;
   updatedAt: string;
+  visibility: string;
 }
 
 const interactions = createInteractions();
@@ -225,17 +189,17 @@ const detailExplanationVisible = ref(false);
 const detailVisible = ref(false);
 const explanationVisible = ref(false);
 const filterState = ref({
-  initiatorStore: '',
-  relatedStores: '',
+  appName: '',
+  appType: '',
   status: '',
 });
 const pageSize = ref(10);
-const selectedJointId = ref('');
-const jointData = ref<JointOperationRecord[]>(
-  interactions.sampleData.map((item) => normalizeJointRecord(item)),
+const selectedAppId = ref('');
+const appData = ref<AppRecord[]>(
+  interactions.sampleData.map((item) => normalizeAppRecord(item)),
 );
 
-const pageTitle = computed(() => String(route.meta.title ?? '联营关系管理'));
+const pageTitle = computed(() => String(route.meta.title ?? '应用列表管理'));
 const pagePriority = computed(() => String(route.meta.priority ?? 'P1'));
 const actionCatalog = computed<InteractionItem[]>(() => [
   ...interactions.actions,
@@ -244,48 +208,45 @@ const actionCatalog = computed<InteractionItem[]>(() => [
 const activeInteraction = computed(() =>
   actionCatalog.value.find((item) => item.label === activeAction.value),
 );
-const selectedJoint = computed(
-  () =>
-    jointData.value.find((item) => item.id === selectedJointId.value) ?? null,
+const selectedApp = computed(
+  () => appData.value.find((item) => item.id === selectedAppId.value) ?? null,
 );
-const isCreateMode = computed(() => activeAction.value === '发起联营');
-const isReleaseMode = computed(() => activeAction.value === '解除联营');
-const isViewMode = computed(() => activeAction.value === '查看范围');
+const isCreateMode = computed(() => activeAction.value === '新增应用');
+const isEditMode = computed(() => activeAction.value === '编辑');
+const isVisibilityMode = computed(() => activeAction.value === '设置可见性');
+const isOfflineMode = computed(() => activeAction.value === '下架');
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
-const showResetButton = computed(() => isCreateMode.value);
-const showSubmitButton = computed(
-  () => isCreateMode.value || isReleaseMode.value,
+const showResetButton = computed(
+  () => isCreateMode.value || isEditMode.value || isVisibilityMode.value,
 );
-const submitButtonText = computed(() => {
-  if (isReleaseMode.value) {
-    return '确认解除';
-  }
-  return '保存';
-});
-const filteredJoints = computed(() => {
-  const initiatorStore = filterState.value.initiatorStore.trim().toLowerCase();
-  const relatedStores = filterState.value.relatedStores.trim().toLowerCase();
+const showSubmitButton = computed(
+  () =>
+    isCreateMode.value ||
+    isEditMode.value ||
+    isVisibilityMode.value ||
+    isOfflineMode.value,
+);
+const submitButtonText = computed(() =>
+  isOfflineMode.value ? '确认下架' : '保存',
+);
+const filteredApps = computed(() => {
+  const appName = filterState.value.appName.trim().toLowerCase();
+  const appType = filterState.value.appType;
   const status = filterState.value.status;
 
-  return jointData.value.filter((item) => {
-    const matchInitiator =
-      !initiatorStore ||
-      item.initiatorStore.toLowerCase().includes(initiatorStore);
-    const matchRelated =
-      !relatedStores ||
-      item.relatedStores.toLowerCase().includes(relatedStores);
-    const matchStatus = !status || item.status === status;
-
-    return matchInitiator && matchRelated && matchStatus;
+  return appData.value.filter((item) => {
+    const matchesName =
+      !appName || item.appName.toLowerCase().includes(appName);
+    const matchesType = !appType || item.appType === appType;
+    const matchesStatus = !status || item.status === status;
+    return matchesName && matchesType && matchesStatus;
   });
 });
 const tableData = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
-  const end = start + pageSize.value;
-
-  return filteredJoints.value.slice(start, end);
+  return filteredApps.value.slice(start, start + pageSize.value);
 });
 const explanationFieldsData = computed(() =>
   (explanations.fields ?? []).map((item) => ({ ...item })),
@@ -296,30 +257,6 @@ const explanationStatusTransitionData = computed(() =>
 const activeInteractionFieldsData = computed(() =>
   (activeInteraction.value?.fields ?? []).map((item) => ({ ...item })),
 );
-
-const [FilterForm] = useVbenForm({
-  actionLayout: 'newLine',
-  actionPosition: 'right',
-  actionWrapperClass: 'pt-3 flex-wrap gap-3',
-  commonConfig: {
-    componentProps: {
-      class: 'w-full',
-    },
-  },
-  compact: true,
-  handleReset: handleFilterReset,
-  handleSubmit: handleFilterSubmit,
-  layout: 'vertical',
-  resetButtonOptions: {
-    content: '重置筛选',
-  },
-  schema: buildFilterSchema(interactions.filters),
-  showDefaultActions: true,
-  submitButtonOptions: {
-    content: '查询',
-  },
-  wrapperClass: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
-});
 
 const [DetailActionForm, detailActionFormApi] = useVbenForm({
   commonConfig: {
@@ -365,11 +302,7 @@ function getFieldDefaultValue(field: FormFieldItem) {
 function buildFieldSchema(
   field: FormFieldItem,
   index: number,
-  {
-    includeRules = false,
-  }: {
-    includeRules?: boolean;
-  } = {},
+  { includeRules = false }: { includeRules?: boolean } = {},
 ): VbenFormSchema {
   const fieldName = getFieldName(field, index);
   const placeholder =
@@ -378,46 +311,6 @@ function buildFieldSchema(
       : `${field.inputType === 'select' ? '请选择' : '请输入'}${field.label}`;
 
   switch (field.inputType) {
-    case 'date':
-      return {
-        component: 'DatePicker',
-        componentProps: {
-          placeholder,
-          type: 'date',
-          valueFormat: 'YYYY-MM-DD',
-        },
-        defaultValue: getFieldDefaultValue(field),
-        fieldName,
-        label: field.label,
-        rules: includeRules && field.required ? 'selectRequired' : undefined,
-      };
-    case 'daterange':
-      return {
-        component: 'DatePicker',
-        componentProps: {
-          endPlaceholder: '结束日期',
-          startPlaceholder: '开始日期',
-          type: 'daterange',
-          valueFormat: 'YYYY-MM-DD',
-        },
-        defaultValue: getFieldDefaultValue(field),
-        fieldName,
-        label: field.label,
-        rules: includeRules && field.required ? 'selectRequired' : undefined,
-      };
-    case 'password':
-      return {
-        component: 'Input',
-        componentProps: {
-          placeholder,
-          showPassword: true,
-          type: 'password',
-        },
-        defaultValue: getFieldDefaultValue(field),
-        fieldName,
-        label: field.label,
-        rules: includeRules && field.required ? 'required' : undefined,
-      };
     case 'select':
       return {
         component: 'Select',
@@ -430,13 +323,6 @@ function buildFieldSchema(
         fieldName,
         label: field.label,
         rules: includeRules && field.required ? 'selectRequired' : undefined,
-      };
-    case 'switch':
-      return {
-        component: 'Switch',
-        defaultValue: getFieldDefaultValue(field),
-        fieldName,
-        label: field.label,
       };
     case 'textarea':
       return {
@@ -454,7 +340,6 @@ function buildFieldSchema(
         label: field.label,
         rules: includeRules && field.required ? 'required' : undefined,
       };
-    case 'text':
     default:
       return {
         component: 'Input',
@@ -478,54 +363,59 @@ function buildDefaultValues(fields: readonly FormFieldItem[] = []) {
   );
 }
 
-function buildFilterSchema(fields: readonly SaaSFilterField[]) {
-  return fields.map((field, index) => buildFieldSchema(field, index));
-}
-
 function buildInteractionSchema(interaction?: InteractionItem) {
   return (interaction?.fields ?? []).map((field, index) =>
-    buildFieldSchema(field, index, {
-      includeRules: true,
-    }),
+    buildFieldSchema(field, index, { includeRules: true }),
   );
 }
 
 function applyInteractionForm(interaction?: InteractionItem) {
-  const schema = buildInteractionSchema(interaction);
-  const defaults = buildDefaultValues(interaction?.fields ?? []);
-
-  detailActionFormApi.setState({ schema });
-  detailActionFormApi.resetForm({ values: defaults });
+  detailActionFormApi.setState({ schema: buildInteractionSchema(interaction) });
+  detailActionFormApi.resetForm({
+    values: buildDefaultValues(interaction?.fields ?? []),
+  });
   void detailActionFormApi.resetValidate();
 }
 
-function normalizeJointRecord(
-  record: Record<string, string>,
-): JointOperationRecord {
+function populateInteractionForm(values: Record<string, any>) {
+  detailActionFormApi.resetForm({
+    values: buildDefaultValues(activeInteraction.value?.fields ?? []),
+  });
+  detailActionFormApi.resetForm({ values });
+  void detailActionFormApi.resetValidate();
+}
+
+function getCurrentDateTime() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+function normalizeAppRecord(record: Record<string, string>): AppRecord {
   return {
-    dataScope: record.dataScope ?? '',
-    id: record.id ?? `joint-${Math.random().toString(36).slice(2, 10)}`,
-    initiatorStore: record.initiatorStore ?? '',
-    relatedStores: record.relatedStores ?? '',
-    status: (record.status as JointStatus) ?? '已建立',
-    updatedAt: record.updatedAt ?? '',
+    appName: record.appName ?? '',
+    appType: record.appType ?? '',
+    id: record.id ?? `app-${Math.random().toString(36).slice(2, 10)}`,
+    status: (record.status as AppShelfStatus) ?? '已下架',
+    updatedAt: record.updatedAt ?? getCurrentDateTime(),
+    visibility: record.visibility ?? '',
   };
 }
 
-function getJointRow(row: Record<string, any>): JointOperationRecord {
-  return normalizeJointRecord(row);
+function getAppRow(row: Record<string, any>) {
+  return row as AppRecord;
 }
 
-function getCellValue(row: JointOperationRecord, key: string) {
-  return row[key as keyof JointOperationRecord] ?? '-';
+function getCellValue(row: AppRecord, key: string) {
+  return row[key as keyof AppRecord] ?? '-';
 }
 
-function getStatusTagType(status: JointStatus) {
-  return status === '已建立' ? 'success' : 'info';
+function getStatusTagType(status: AppShelfStatus) {
+  return status === '已上架' ? 'success' : 'info';
 }
 
-function updateJointRecord(id: string, patch: Partial<JointOperationRecord>) {
-  jointData.value = jointData.value.map((item) =>
+function updateAppRecord(id: string, patch: Partial<AppRecord>) {
+  appData.value = appData.value.map((item) =>
     item.id === id
       ? {
           ...item,
@@ -536,128 +426,182 @@ function updateJointRecord(id: string, patch: Partial<JointOperationRecord>) {
   );
 }
 
-function getCurrentDateTime() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = `${now.getMonth() + 1}`.padStart(2, '0');
-  const day = `${now.getDate()}`.padStart(2, '0');
-  const hours = `${now.getHours()}`.padStart(2, '0');
-  const minutes = `${now.getMinutes()}`.padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-}
-
 function closeDetailDrawer() {
   detailVisible.value = false;
 }
 
 function openAction(action: InteractionItem) {
   activeAction.value = action.label;
-  selectedJointId.value = '';
-  detailVisible.value = true;
+  selectedAppId.value = '';
   applyInteractionForm(action);
+  detailVisible.value = true;
 }
 
 function handleRowAction(action: InteractionItem, row: Record<string, any>) {
-  const currentRow = getJointRow(row);
+  const currentRow = getAppRow(row);
   activeAction.value = action.label;
-  selectedJointId.value = currentRow.id;
-  detailVisible.value = true;
+  selectedAppId.value = currentRow.id;
   applyInteractionForm(action);
+
+  if (action.label === '编辑' || action.label === '设置可见性') {
+    populateInteractionForm({
+      appName: currentRow.appName,
+      appType: currentRow.appType,
+      status: currentRow.status,
+      visibility: currentRow.visibility,
+    });
+  }
+
+  detailVisible.value = true;
 }
 
-function handleFilterSubmit(values: Record<string, any>) {
+function handleFilterSubmit() {
   filterState.value = {
-    initiatorStore: String(values.initiatorStore ?? '').trim(),
-    relatedStores: String(values.relatedStores ?? '').trim(),
-    status: String(values.status ?? '').trim(),
+    appName: filterState.value.appName.trim(),
+    appType: filterState.value.appType.trim(),
+    status: filterState.value.status.trim(),
   };
   currentPage.value = 1;
 }
 
 function handleFilterReset() {
   filterState.value = {
-    initiatorStore: '',
-    relatedStores: '',
+    appName: '',
+    appType: '',
     status: '',
   };
   currentPage.value = 1;
 }
 
 function resetActiveForm() {
+  if ((isEditMode.value || isVisibilityMode.value) && selectedApp.value) {
+    populateInteractionForm({
+      appName: selectedApp.value.appName,
+      appType: selectedApp.value.appType,
+      status: selectedApp.value.status,
+      visibility: selectedApp.value.visibility,
+    });
+    return;
+  }
+
   applyInteractionForm(activeInteraction.value);
 }
 
-async function createJoint(values: Record<string, any>) {
-  const initiatorStore = String(values.initiatorStore ?? '').trim();
-  const relatedStores = String(values.relatedStores ?? '').trim();
-  const dataScope = String(values.dataScope ?? '').trim() || '订单、营收、会员';
+async function createApp(values: Record<string, any>) {
+  const appName = String(values.appName ?? '').trim();
+  const appType = String(values.appType ?? '').trim();
+  const visibility = String(values.visibility ?? '').trim();
+  const status = String(values.status ?? '已下架').trim() as AppShelfStatus;
 
-  if (!initiatorStore || !relatedStores) {
-    ElMessage.warning('请先完善联营信息');
+  if (!appName || !appType || !visibility) {
+    ElMessage.warning('请先完善应用信息');
     return;
   }
 
-  if (relatedStores.includes(initiatorStore)) {
-    ElMessage.warning('关联门店中不能包含发起门店自身');
-    return;
-  }
-
-  const duplicated = jointData.value.some(
-    (item) =>
-      item.initiatorStore === initiatorStore &&
-      item.relatedStores === relatedStores &&
-      item.status === '已建立',
-  );
+  const duplicated = appData.value.some((item) => item.appName === appName);
   if (duplicated) {
-    ElMessage.warning('当前联营关系已存在');
+    ElMessage.warning('已存在同名应用，请调整后再提交');
     return;
   }
 
-  jointData.value = [
-    normalizeJointRecord({
-      dataScope,
-      initiatorStore,
-      relatedStores,
-      status: '已建立',
+  appData.value = [
+    normalizeAppRecord({
+      appName,
+      appType,
+      status,
       updatedAt: getCurrentDateTime(),
+      visibility,
     }),
-    ...jointData.value,
+    ...appData.value,
   ];
   currentPage.value = 1;
-  ElMessage.success(`已发起联营：${initiatorStore}`);
+  ElMessage.success(`已新增应用：${appName}`);
   closeDetailDrawer();
 }
 
-async function releaseJoint() {
-  if (!selectedJoint.value) {
-    ElMessage.warning('未找到当前联营关系，请重新选择');
+async function editApp(values: Record<string, any>) {
+  if (!selectedApp.value) {
+    ElMessage.warning('未找到当前应用，请重新选择');
     closeDetailDrawer();
     return;
   }
 
-  if (selectedJoint.value.status === '已解除') {
-    ElMessage.warning('当前联营关系已解除，无需重复操作');
-    closeDetailDrawer();
+  const appName = String(values.appName ?? '').trim();
+  const appType = String(values.appType ?? '').trim();
+  const visibility = String(values.visibility ?? '').trim();
+  const status = String(values.status ?? '已下架').trim() as AppShelfStatus;
+
+  if (!appName || !appType || !visibility) {
+    ElMessage.warning('请先完善应用信息');
     return;
   }
 
-  updateJointRecord(selectedJoint.value.id, {
-    status: '已解除',
+  updateAppRecord(selectedApp.value.id, {
+    appName,
+    appType,
+    status,
+    visibility,
   });
-  ElMessage.success(`已解除联营：${selectedJoint.value.initiatorStore}`);
+  ElMessage.success(`已更新应用：${appName}`);
+  closeDetailDrawer();
+}
+
+async function updateVisibility(values: Record<string, any>) {
+  if (!selectedApp.value) {
+    ElMessage.warning('未找到当前应用，请重新选择');
+    closeDetailDrawer();
+    return;
+  }
+
+  const visibility = String(values.visibility ?? '').trim();
+
+  if (!visibility) {
+    ElMessage.warning('请先填写可见范围');
+    return;
+  }
+
+  updateAppRecord(selectedApp.value.id, { visibility });
+  ElMessage.success(`已更新应用可见性：${selectedApp.value.appName}`);
+  closeDetailDrawer();
+}
+
+async function offlineApp() {
+  if (!selectedApp.value) {
+    ElMessage.warning('未找到当前应用，请重新选择');
+    closeDetailDrawer();
+    return;
+  }
+
+  if (selectedApp.value.status === '已下架') {
+    ElMessage.info('当前应用已下架');
+    closeDetailDrawer();
+    return;
+  }
+
+  updateAppRecord(selectedApp.value.id, { status: '已下架' });
+  ElMessage.success(`已下架应用：${selectedApp.value.appName}`);
   closeDetailDrawer();
 }
 
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
-    await createJoint(values);
+    await createApp(values);
+    return;
+  }
+
+  if (isEditMode.value) {
+    await editApp(values);
+    return;
+  }
+
+  if (isVisibilityMode.value) {
+    await updateVisibility(values);
   }
 }
 
 async function submitActiveAction() {
-  if (isReleaseMode.value) {
-    await releaseJoint();
+  if (isOfflineMode.value) {
+    await offlineApp();
     return;
   }
 
@@ -677,7 +621,7 @@ watch(detailVisible, (visible) => {
   if (!visible) {
     activeAction.value = '';
     detailExplanationVisible.value = false;
-    selectedJointId.value = '';
+    selectedAppId.value = '';
     applyInteractionForm();
   }
 });
@@ -686,103 +630,133 @@ function createInteractions(): PageInteractions {
   return {
     actions: [
       {
-        label: '发起联营',
+        label: '新增应用',
         type: 'primary',
-        description: '选择发起门店与关联门店，建立联营关系。',
+        description: '登记新的 SaaS 应用，并配置其类型和可见范围。',
         fields: [
+          createTextField({
+            field: 'appName',
+            label: '应用名称',
+            note: '应用展示名称',
+            required: true,
+          }),
           createSelectField({
-            field: 'initiatorStore',
-            label: '发起门店',
-            note: '联营发起方',
-            options: sampleStoreOptions,
+            field: 'appType',
+            label: '应用类型',
+            note: '营销应用 / 运营应用 / 数据应用',
+            options: appTypeOptions,
             required: true,
           }),
           createTextareaField({
-            field: 'relatedStores',
-            label: '关联门店',
-            note: '被关联门店，可多填',
+            field: 'visibility',
+            label: '可见范围',
+            note: '如旗舰版可见、景区门店可见',
             required: true,
             rows: 3,
           }),
-          createTextareaField({
-            field: 'dataScope',
-            label: '可查看数据范围',
-            note: '默认包含订单、营收、会员等数据',
-            rows: 2,
+          createSelectField({
+            field: 'status',
+            label: '上架状态',
+            note: '已上架 / 已下架',
+            options: appShelfStatusOptions,
+            required: true,
           }),
         ],
-        goal: '建立门店间数据联营关系。',
-        permissionPoints: ['建立'],
-        processSteps: [
-          '选择发起门店。',
-          '填写关联门店。',
-          '确认可共享的数据范围后提交。',
-        ],
-      },
-      {
-        label: '解除联营',
-        type: 'danger',
-        description: '解除门店联营关系，并关闭联营数据查看范围。',
-        documentNotes: ['解除前需校验管理员权限。'],
-        goal: '终止门店间联营关系。',
-        permissionPoints: ['解除'],
+        goal: '建立新的应用档案。',
+        permissionPoints: ['新增应用'],
       },
     ],
     columns: [
-      { key: 'initiatorStore', label: '发起门店' },
-      { key: 'relatedStores', label: '关联门店' },
-      { key: 'dataScope', label: '数据范围' },
-      { key: 'status', label: '联营状态' },
+      { key: 'appName', label: '应用名称' },
+      { key: 'appType', label: '应用类型' },
+      { key: 'visibility', label: '可见范围' },
+      { key: 'status', label: '上架状态' },
       { key: 'updatedAt', label: '更新时间' },
-    ],
-    filters: [
-      createTextFilter({
-        field: 'initiatorStore',
-        label: '发起门店',
-        placeholder: '请输入发起门店',
-      }),
-      createTextFilter({
-        field: 'relatedStores',
-        label: '关联门店',
-        placeholder: '请输入关联门店',
-      }),
-      createSelectFilter({
-        field: 'status',
-        label: '联营状态',
-        options: jointOperationStatusOptions,
-      }),
     ],
     rowActions: [
       {
-        label: '查看范围',
-        description: '查看联营后可共享的数据范围。',
-        goal: '确认联营数据边界。',
-        permissionPoints: ['查看'],
+        label: '编辑',
+        description: '修改应用名称、类型和上架状态。',
+        fields: [
+          createTextField({
+            field: 'appName',
+            label: '应用名称',
+            note: '应用展示名称',
+            required: true,
+          }),
+          createSelectField({
+            field: 'appType',
+            label: '应用类型',
+            note: '营销应用 / 运营应用 / 数据应用',
+            options: appTypeOptions,
+            required: true,
+          }),
+          createTextareaField({
+            field: 'visibility',
+            label: '可见范围',
+            note: '按版本或门店类型配置可见性',
+            required: true,
+            rows: 3,
+          }),
+          createSelectField({
+            field: 'status',
+            label: '上架状态',
+            note: '应用当前上架状态',
+            options: appShelfStatusOptions,
+            required: true,
+          }),
+        ],
+        goal: '维护应用基础信息。',
+        permissionPoints: ['编辑应用'],
       },
       {
-        label: '解除联营',
+        label: '设置可见性',
+        type: 'warning',
+        description: '调整应用对不同版本或门店类型的可见范围。',
+        fields: [
+          createTextareaField({
+            field: 'visibility',
+            label: '可见范围',
+            note: '支持按版本、门店类型、组织范围描述',
+            required: true,
+            rows: 4,
+          }),
+        ],
+        goal: '控制应用开通范围。',
+        permissionPoints: ['设置可见性'],
+      },
+      {
+        label: '下架',
         type: 'danger',
-        description: '对单条联营关系执行解除操作。',
-        goal: '关闭当前联营关系。',
-        permissionPoints: ['解除'],
+        description: '关闭当前应用的开通入口，不影响已开通门店。',
+        goal: '停止新门店继续开通该应用。',
+        permissionPoints: ['下架应用'],
       },
     ],
     sampleData: [
       {
-        dataScope: '订单、营收、会员',
-        id: 'joint-001',
-        initiatorStore: '欢乐谷东区店',
-        relatedStores: '欢乐谷西区店、欢乐谷南门店',
-        status: '已建立',
-        updatedAt: '2026-07-05 11:30',
+        appName: '会员营销中心',
+        appType: '营销应用',
+        id: 'app-001',
+        status: '已上架',
+        updatedAt: '2026-07-02 12:15',
+        visibility: '旗舰版可见',
       },
       {
-        dataScope: '订单、会员',
-        id: 'joint-002',
-        initiatorStore: '海岸线游客中心',
-        relatedStores: '海岸线北门店',
-        status: '已解除',
-        updatedAt: '2026-07-03 15:20',
+        appName: '门店巡检台',
+        appType: '运营应用',
+        id: 'app-002',
+        status: '已下架',
+        updatedAt: '2026-07-05 16:40',
+        visibility: '全部门店可见',
+      },
+      {
+        appName: '经营分析看板',
+        appType: '数据应用',
+        id: 'app-003',
+        status: '已上架',
+        updatedAt: '2026-07-06 18:10',
+        visibility: '专业版 / 旗舰版可见',
       },
     ],
     supportActions: [],
@@ -791,44 +765,50 @@ function createInteractions(): PageInteractions {
 
 function createExplanations(): PageExplanations {
   return {
+    pageGoal: '管理应用档案、上架状态和可见范围。',
     description:
-      '管理门店间联营关系，覆盖发起联营、查看共享范围和解除联营等关键动作。',
+      '用于维护 SaaS 应用的基本信息、上架状态以及不同版本或门店类型的可见性。',
     documentNotes: [
-      '联营关系建立后，关联门店可共享指定的数据范围。',
-      '解除联营前应确认业务方是否已完成相关数据交接。',
-      '发起门店和关联门店不允许填写为同一门店。',
-    ],
-    exceptions: [
-      '发起门店为空或关联门店为空时不允许提交。',
-      '关联门店中包含发起门店自身时不允许发起联营。',
-      '已解除的联营关系不允许重复解除。',
+      '应用下架仅关闭新的开通入口，不影响已开通门店继续使用。',
+      '可见范围需要和业务版本、门店类型保持一致。',
     ],
     fields: [
-      { label: '发起门店', note: '联营关系的发起方门店', required: true },
-      { label: '关联门店', note: '被联营的门店集合', required: true },
-      { label: '可查看数据范围', note: '联营后允许共享的数据边界' },
-      { label: '联营状态', note: '标记联营关系当前是否生效' },
+      { label: '应用名称', note: '应用在后台与前台展示的名称', required: true },
+      {
+        label: '应用类型',
+        note: '区分营销、运营、数据等应用类型',
+        required: true,
+      },
+      {
+        label: '可见范围',
+        note: '定义哪些版本或门店类型可看到该应用',
+        required: true,
+      },
+      { label: '上架状态', note: '控制应用是否允许新门店开通', required: true },
     ],
-    pageGoal: '建立和维护门店联营关系，并清晰约束共享数据范围。',
-    permissionPoints: ['查看', '建立', '解除'],
     processSteps: [
-      '通过发起门店、关联门店或状态筛选联营记录。',
-      '从页面发起新的联营关系，或从列表查看范围、解除联营。',
-      '在抽屉中完成信息填写或确认动作。',
-      '提交后实时更新联营状态和更新时间。',
+      '通过应用名称、类型、上架状态筛选应用。',
+      '在抽屉中完成新增、编辑或可见性配置。',
+      '通过下架动作关闭当前应用的开通入口。',
+    ],
+    permissionPoints: ['新增应用', '编辑应用', '设置可见性', '下架应用'],
+    exceptions: [
+      '同名应用不允许重复创建。',
+      '可见范围为空时，不允许保存应用。',
+      '已下架应用不需要重复执行下架操作。',
     ],
     statusTransitions: [
       {
-        current: '已建立',
-        note: '解除后门店间共享数据能力关闭。',
-        target: '已解除',
-        trigger: '解除联营',
+        current: '已上架',
+        trigger: '下架',
+        target: '已下架',
+        note: '下架后不再允许新的门店开通该应用。',
       },
       {
-        current: '已解除',
-        note: '如需恢复，应重新发起联营。',
-        target: '已建立',
-        trigger: '发起联营',
+        current: '已下架',
+        trigger: '编辑并改为已上架',
+        target: '已上架',
+        note: '重新上架后，符合可见范围的门店可再次开通。',
       },
     ],
   };
@@ -850,18 +830,67 @@ function createExplanations(): PageExplanations {
 
     <div class="flex flex-col gap-4">
       <div class="saas-filter-panel rounded-md bg-card p-3">
-        <FilterForm>
-          <template #reset-before>
-            <ElButton
-              v-for="action in interactions.actions"
-              :key="action.label"
-              :type="action.type || 'primary'"
-              @click="openAction(action)"
-            >
-              {{ action.label }}
-            </ElButton>
-          </template>
-        </FilterForm>
+        <ElForm
+          class="saas-filter-form"
+          :model="filterState"
+          label-position="left"
+          @submit.prevent="handleFilterSubmit"
+        >
+          <div class="saas-filter-grid">
+            <ElFormItem label="应用名称">
+              <ElInput
+                v-model="filterState.appName"
+                clearable
+                placeholder="请输入应用名称"
+              />
+            </ElFormItem>
+
+            <ElFormItem label="应用类型">
+              <ElSelect
+                v-model="filterState.appType"
+                clearable
+                filterable
+                placeholder="请选择应用类型"
+              >
+                <ElOption
+                  v-for="option in appTypeOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <ElFormItem label="上架状态">
+              <ElSelect
+                v-model="filterState.status"
+                clearable
+                filterable
+                placeholder="请选择上架状态"
+              >
+                <ElOption
+                  v-for="option in appShelfStatusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <div class="saas-filter-actions">
+              <ElButton
+                v-for="action in interactions.actions"
+                :key="action.label"
+                :type="action.type || 'primary'"
+                @click="openAction(action)"
+              >
+                {{ action.label }}
+              </ElButton>
+              <ElButton type="primary" native-type="submit">查询</ElButton>
+              <ElButton @click="handleFilterReset">重置</ElButton>
+            </div>
+          </div>
+        </ElForm>
       </div>
 
       <div class="saas-table-panel rounded-md bg-card p-3">
@@ -875,13 +904,11 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElTag
                 v-if="column.key === 'status'"
-                :type="getStatusTagType(getJointRow(row).status)"
+                :type="getStatusTagType(getAppRow(row).status)"
               >
-                {{ getJointRow(row).status }}
+                {{ getAppRow(row).status }}
               </ElTag>
-              <span v-else>{{
-                getCellValue(getJointRow(row), column.key)
-              }}</span>
+              <span v-else>{{ getCellValue(getAppRow(row), column.key) }}</span>
             </template>
           </ElTable.TableColumn>
 
@@ -892,10 +919,6 @@ function createExplanations(): PageExplanations {
                   v-for="action in interactions.rowActions"
                   :key="action.label"
                   link
-                  :disabled="
-                    action.label === '解除联营' &&
-                    getJointRow(row).status === '已解除'
-                  "
                   :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
@@ -912,7 +935,7 @@ function createExplanations(): PageExplanations {
             :page-size="pageSize"
             :page-sizes="[10, 20, 50]"
             layout="total, sizes, prev, pager, next"
-            :total="filteredJoints.length"
+            :total="filteredApps.length"
             @current-change="handleCurrentPageChange"
             @size-change="handlePageSizeChange"
           />
@@ -935,9 +958,7 @@ function createExplanations(): PageExplanations {
           <div class="flex flex-col gap-4">
             <ElDescriptions :column="2" border>
               <ElDescriptionsItem label="优先级">
-                <ElTag :type="pagePriority === 'P0' ? 'danger' : 'warning'">
-                  {{ pagePriority }}
-                </ElTag>
+                <ElTag type="warning">{{ pagePriority }}</ElTag>
               </ElDescriptionsItem>
               <ElDescriptionsItem label="页面目标">
                 {{ explanations.pageGoal }}
@@ -1020,45 +1041,6 @@ function createExplanations(): PageExplanations {
                 <ElTable.TableColumn label="说明" prop="note" min-width="320" />
               </ElTable>
             </div>
-
-            <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <div
-                v-if="
-                  explanations.permissionPoints &&
-                  explanations.permissionPoints.length > 0
-                "
-              >
-                <div class="mb-2 text-sm font-medium">权限点</div>
-                <ul
-                  class="list-disc pl-5 text-sm leading-7 text-[var(--el-text-color-primary)]"
-                >
-                  <li
-                    v-for="permission in explanations.permissionPoints"
-                    :key="permission"
-                  >
-                    {{ permission }}
-                  </li>
-                </ul>
-              </div>
-
-              <div
-                v-if="
-                  explanations.exceptions && explanations.exceptions.length > 0
-                "
-              >
-                <div class="mb-2 text-sm font-medium">异常与限制</div>
-                <ul
-                  class="list-disc pl-5 text-sm leading-7 text-[var(--el-text-color-primary)]"
-                >
-                  <li
-                    v-for="exception in explanations.exceptions"
-                    :key="exception"
-                  >
-                    {{ exception }}
-                  </li>
-                </ul>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -1084,30 +1066,42 @@ function createExplanations(): PageExplanations {
         </div>
       </template>
 
-      <div v-if="isViewMode && selectedJoint" class="flex flex-col gap-4">
+      <div
+        v-if="selectedApp && !hasActionFields && !isOfflineMode"
+        class="flex flex-col gap-4"
+      >
         <ElDescriptions :column="1" border>
-          <ElDescriptionsItem label="发起门店">
-            {{ selectedJoint.initiatorStore }}
+          <ElDescriptionsItem label="应用名称">
+            {{ selectedApp.appName }}
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="关联门店">
-            {{ selectedJoint.relatedStores }}
+          <ElDescriptionsItem label="应用类型">
+            {{ selectedApp.appType }}
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="数据范围">
-            {{ selectedJoint.dataScope }}
+          <ElDescriptionsItem label="可见范围">
+            {{ selectedApp.visibility }}
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="联营状态">
-            <ElTag :type="getStatusTagType(selectedJoint.status)">
-              {{ selectedJoint.status }}
+          <ElDescriptionsItem label="上架状态">
+            <ElTag :type="getStatusTagType(selectedApp.status)">
+              {{ selectedApp.status }}
             </ElTag>
           </ElDescriptionsItem>
           <ElDescriptionsItem label="更新时间">
-            {{ selectedJoint.updatedAt }}
+            {{ selectedApp.updatedAt }}
           </ElDescriptionsItem>
         </ElDescriptions>
       </div>
 
       <div v-else-if="hasActionFields" class="flex flex-col gap-4">
         <DetailActionForm />
+      </div>
+
+      <div
+        v-else-if="selectedApp"
+        class="rounded-lg border border-dashed border-[var(--el-border-color)] p-4 text-sm leading-7"
+      >
+        <div>当前应用：{{ selectedApp.appName }}</div>
+        <div>当前状态：{{ selectedApp.status }}</div>
+        <div>下架后仅关闭新门店的开通入口。</div>
       </div>
 
       <ElEmpty
@@ -1165,23 +1159,6 @@ function createExplanations(): PageExplanations {
               </ElDescriptionsItem>
             </ElDescriptions>
 
-            <div
-              v-if="
-                activeInteraction?.documentNotes &&
-                activeInteraction.documentNotes.length > 0
-              "
-              class="rounded-lg border border-dashed border-[var(--el-border-color)] bg-[var(--el-fill-color-lighter)] p-4"
-            >
-              <div class="mb-2 text-sm font-medium">规则提醒</div>
-              <ul
-                class="list-disc pl-5 text-sm leading-6 text-[var(--el-text-color-secondary)]"
-              >
-                <li v-for="note in activeInteraction.documentNotes" :key="note">
-                  {{ note }}
-                </li>
-              </ul>
-            </div>
-
             <div v-if="activeInteractionFieldsData.length > 0">
               <div class="mb-2 text-sm font-medium">涉及字段</div>
               <ElTable
@@ -1204,76 +1181,6 @@ function createExplanations(): PageExplanations {
                 <ElTable.TableColumn label="说明" prop="note" min-width="260" />
               </ElTable>
             </div>
-
-            <div
-              v-if="
-                activeInteraction?.processSteps &&
-                activeInteraction.processSteps.length > 0
-              "
-              class="flex flex-col gap-2"
-            >
-              <div class="text-sm font-medium">处理流程</div>
-              <ol
-                class="list-decimal pl-5 text-sm leading-6 text-[var(--el-text-color-primary)]"
-              >
-                <li v-for="step in activeInteraction.processSteps" :key="step">
-                  {{ step }}
-                </li>
-              </ol>
-            </div>
-
-            <div
-              v-if="
-                activeInteraction?.permissionPoints &&
-                activeInteraction.permissionPoints.length > 0
-              "
-              class="flex flex-col gap-2"
-            >
-              <div class="text-sm font-medium">相关权限点</div>
-              <ElSpace wrap>
-                <ElTag
-                  v-for="permission in activeInteraction.permissionPoints"
-                  :key="permission"
-                >
-                  {{ permission }}
-                </ElTag>
-              </ElSpace>
-            </div>
-
-            <div
-              v-if="
-                activeInteraction?.statusTransitions &&
-                activeInteraction.statusTransitions.length > 0
-              "
-            >
-              <div class="mb-2 text-sm font-medium">状态流转</div>
-              <ElTable
-                :data="
-                  activeInteraction.statusTransitions.map((item) => ({
-                    ...item,
-                  }))
-                "
-                max-height="260"
-                stripe
-              >
-                <ElTable.TableColumn
-                  label="当前状态"
-                  prop="current"
-                  min-width="120"
-                />
-                <ElTable.TableColumn
-                  label="触发动作"
-                  prop="trigger"
-                  min-width="140"
-                />
-                <ElTable.TableColumn
-                  label="目标状态"
-                  prop="target"
-                  min-width="120"
-                />
-                <ElTable.TableColumn label="说明" prop="note" min-width="260" />
-              </ElTable>
-            </div>
           </div>
         </div>
       </div>
@@ -1292,21 +1199,46 @@ function createExplanations(): PageExplanations {
   padding-bottom: 8px;
 }
 
-.saas-filter-panel :deep(.grid) {
-  row-gap: 4px;
+.saas-filter-form {
+  width: 100%;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3) {
-  row-gap: 12px;
-  padding-bottom: 0;
+.saas-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
+      180px,
+      1fr
+    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 12px 16px;
+  align-items: end;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3 .el-button) {
-  margin-left: 0;
+.saas-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  grid-column: 1 / -1;
+  padding-top: 2px;
 }
 
 .saas-filter-panel :deep(.el-form-item) {
   margin-bottom: 12px;
+}
+
+.saas-filter-panel :deep(.el-input),
+.saas-filter-panel :deep(.el-select) {
+  width: 100%;
+}
+
+.saas-filter-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .saas-filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .saas-table-panel {

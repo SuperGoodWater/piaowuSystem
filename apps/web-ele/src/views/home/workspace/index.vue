@@ -27,7 +27,7 @@ const userStore = useUserStore();
 
 // 这是一个示例数据，实际项目中需要根据实际情况进行调整
 // url 也可以是内部路由，在 navTo 方法中识别处理，进行内部跳转
-// 例如：url: /dashboard/workspace
+// 例如：url: /home/workspace
 const projectItems: WorkbenchProjectItem[] = [
   {
     color: '',
@@ -97,7 +97,7 @@ const quickNavItems: WorkbenchQuickNavItem[] = [
     color: '#bf0c2c',
     icon: 'ion:grid-outline',
     title: '仪表盘',
-    url: '/dashboard',
+    url: '/home',
   },
   {
     color: '#e18525',
@@ -121,7 +121,7 @@ const quickNavItems: WorkbenchQuickNavItem[] = [
     color: '#00d8ff',
     icon: 'ion:bar-chart-outline',
     title: '图表',
-    url: '/analytics',
+    url: '/home/analytics',
   },
 ];
 

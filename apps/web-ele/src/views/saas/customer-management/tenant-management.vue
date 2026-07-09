@@ -13,32 +13,19 @@ import {
   ElDialog,
   ElDrawer,
   ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElInput,
   ElMessage,
+  ElOption,
   ElPagination,
+  ElSelect,
   ElSpace,
   ElTable,
   ElTag,
 } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
-
-interface SaaSFilterField {
-  defaultValue?: boolean | number | string | string[];
-  field?: string;
-  inputType?:
-    | 'date'
-    | 'daterange'
-    | 'password'
-    | 'select'
-    | 'switch'
-    | 'text'
-    | 'textarea';
-  label: string;
-  options?: readonly { label: string; value: boolean | number | string }[];
-  placeholder: string;
-  required?: boolean;
-  rows?: number;
-}
 
 interface SaaSColumnItem {
   key: string;
@@ -97,7 +84,6 @@ interface SaaSPageMeta {
   documentNotes?: readonly string[];
   exceptions?: readonly string[];
   fields?: readonly SaaSFieldItem[];
-  filters: readonly SaaSFilterField[];
   pageGoal: string;
   pendingItems?: readonly string[];
   permissionPoints?: readonly string[];
@@ -110,8 +96,6 @@ interface SaaSPageMeta {
 
 type FieldValue = boolean | number | string | string[];
 
-type FieldOption = { label: string; value: boolean | number | string };
-
 interface BaseFieldInput {
   defaultValue?: FieldValue;
   field: string;
@@ -123,26 +107,10 @@ interface BaseActionFieldInput extends BaseFieldInput {
   note: string;
 }
 
-interface BaseFilterInput extends BaseFieldInput {
-  placeholder?: string;
-}
-
 function createPasswordField(input: BaseActionFieldInput): SaaSFieldItem {
   return {
     ...input,
     inputType: 'password',
-  };
-}
-
-function createSelectFilter(
-  input: BaseFilterInput & {
-    options: readonly FieldOption[];
-  },
-): SaaSFilterField {
-  return {
-    ...input,
-    inputType: 'select',
-    placeholder: input.placeholder ?? `请选择${input.label}`,
   };
 }
 
@@ -153,14 +121,6 @@ function createTextField(input: BaseActionFieldInput): SaaSFieldItem {
   };
 }
 
-function createTextFilter(input: BaseFilterInput): SaaSFilterField {
-  return {
-    ...input,
-    inputType: 'text',
-    placeholder: input.placeholder ?? `请输入${input.label}`,
-  };
-}
-
 const tenantStatusOptions = [
   { label: '启用', value: '启用' },
   { label: '停用', value: '停用' },
@@ -168,12 +128,7 @@ const tenantStatusOptions = [
 
 type PageInteractions = Pick<
   SaaSPageMeta,
-  | 'actions'
-  | 'columns'
-  | 'filters'
-  | 'rowActions'
-  | 'sampleData'
-  | 'supportActions'
+  'actions' | 'columns' | 'rowActions' | 'sampleData' | 'supportActions'
 >;
 type PageExplanations = Pick<
   SaaSPageMeta,
@@ -189,7 +144,7 @@ type PageExplanations = Pick<
 >;
 
 type InteractionItem = SaaSActionItem;
-type FormFieldItem = SaaSFieldItem | SaaSFilterField;
+type FormFieldItem = SaaSFieldItem;
 type TenantStatus = '停用' | '启用';
 
 interface TenantRecord {
@@ -306,30 +261,6 @@ const activeInteractionFieldsData = computed(() =>
   (activeInteraction.value?.fields ?? []).map((item) => ({ ...item })),
 );
 
-const [FilterForm] = useVbenForm({
-  actionLayout: 'newLine',
-  actionPosition: 'right',
-  actionWrapperClass: 'pt-3 flex-wrap gap-3',
-  commonConfig: {
-    componentProps: {
-      class: 'w-full',
-    },
-  },
-  compact: true,
-  handleReset: handleFilterReset,
-  handleSubmit: handleFilterSubmit,
-  layout: 'vertical',
-  resetButtonOptions: {
-    content: '重置',
-  },
-  schema: buildFilterSchema(interactions.filters),
-  showDefaultActions: true,
-  submitButtonOptions: {
-    content: '查询',
-  },
-  wrapperClass: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
-});
-
 const [DetailActionForm, detailActionFormApi] = useVbenForm({
   commonConfig: {
     componentProps: {
@@ -381,10 +312,7 @@ function buildFieldSchema(
   } = {},
 ): VbenFormSchema {
   const fieldName = getFieldName(field, index);
-  const placeholder =
-    'placeholder' in field && field.placeholder
-      ? field.placeholder
-      : `${field.inputType === 'select' ? '请选择' : '请输入'}${field.label}`;
+  const placeholder = `${field.inputType === 'select' ? '请选择' : '请输入'}${field.label}`;
 
   switch (field.inputType) {
     case 'date':
@@ -485,10 +413,6 @@ function buildDefaultValues(fields: readonly FormFieldItem[] = []) {
       getFieldDefaultValue(field),
     ]),
   );
-}
-
-function buildFilterSchema(filters: readonly SaaSFilterField[] = []) {
-  return filters.map((filter, index) => buildFieldSchema(filter, index));
 }
 
 function buildInteractionSchema(interaction?: InteractionItem) {
@@ -618,10 +542,10 @@ function isDuplicateTenant(
   );
 }
 
-function handleFilterSubmit(values: Record<string, any>) {
+function handleFilterSubmit() {
   filterState.value = {
-    keyword: String(values.keyword ?? '').trim(),
-    status: String(values.status ?? '').trim(),
+    keyword: filterState.value.keyword.trim(),
+    status: filterState.value.status.trim(),
   };
   currentPage.value = 1;
 }
@@ -798,18 +722,6 @@ function createInteractions(): PageInteractions {
       { key: 'status', label: '租户状态' },
       { key: 'createdAt', label: '创建时间' },
     ],
-    filters: [
-      createTextFilter({
-        field: 'keyword',
-        label: '关键词',
-        placeholder: '请输入租户名称、管理员账号或手机号',
-      }),
-      createSelectFilter({
-        field: 'status',
-        label: '租户状态',
-        options: tenantStatusOptions,
-      }),
-    ],
     rowActions: [
       {
         label: '查看详情',
@@ -963,18 +875,51 @@ function createExplanations(): PageExplanations {
 
     <div class="flex flex-col gap-4">
       <div class="saas-filter-panel rounded-md bg-card p-3">
-        <FilterForm>
-          <template #reset-before>
-            <ElButton
-              v-for="action in interactions.actions"
-              :key="action.label"
-              :type="action.type || 'primary'"
-              @click="openAction(action)"
-            >
-              {{ action.label }}
-            </ElButton>
-          </template>
-        </FilterForm>
+        <ElForm
+          class="saas-filter-form"
+          :model="filterState"
+          label-position="left"
+          @submit.prevent="handleFilterSubmit"
+        >
+          <div class="saas-filter-grid">
+            <ElFormItem label="关键词">
+              <ElInput
+                v-model="filterState.keyword"
+                clearable
+                placeholder="输入租户名、管理员账号或手机号"
+              />
+            </ElFormItem>
+
+            <ElFormItem label="租户状态">
+              <ElSelect
+                v-model="filterState.status"
+                clearable
+                filterable
+                placeholder="请选择租户状态"
+              >
+                <ElOption
+                  v-for="option in tenantStatusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <div class="saas-filter-actions">
+              <ElButton
+                v-for="action in interactions.actions"
+                :key="action.label"
+                :type="action.type || 'primary'"
+                @click="openAction(action)"
+              >
+                {{ action.label }}
+              </ElButton>
+              <ElButton type="primary" native-type="submit">查询</ElButton>
+              <ElButton @click="handleFilterReset">重置</ElButton>
+            </div>
+          </div>
+        </ElForm>
       </div>
 
       <div class="saas-table-panel rounded-md bg-card p-3">
@@ -1444,21 +1389,46 @@ function createExplanations(): PageExplanations {
   padding-bottom: 8px;
 }
 
-.saas-filter-panel :deep(.grid) {
-  row-gap: 4px;
+.saas-filter-form {
+  width: 100%;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3) {
-  row-gap: 12px;
-  padding-bottom: 0;
+.saas-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
+      180px,
+      1fr
+    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 12px 16px;
+  align-items: end;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3 .el-button) {
-  margin-left: 0;
+.saas-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  grid-column: 1 / -1;
+  padding-top: 2px;
 }
 
 .saas-filter-panel :deep(.el-form-item) {
   margin-bottom: 12px;
+}
+
+.saas-filter-panel :deep(.el-input),
+.saas-filter-panel :deep(.el-select) {
+  width: 100%;
+}
+
+.saas-filter-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .saas-filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .saas-table-panel {

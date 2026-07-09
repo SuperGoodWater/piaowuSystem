@@ -13,32 +13,19 @@ import {
   ElDialog,
   ElDrawer,
   ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElInput,
   ElMessage,
+  ElOption,
   ElPagination,
+  ElSelect,
   ElSpace,
   ElTable,
   ElTag,
 } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
-
-interface SaaSFilterField {
-  defaultValue?: boolean | number | string | string[];
-  field?: string;
-  inputType?:
-    | 'date'
-    | 'daterange'
-    | 'password'
-    | 'select'
-    | 'switch'
-    | 'text'
-    | 'textarea';
-  label: string;
-  options?: readonly { label: string; value: boolean | number | string }[];
-  placeholder: string;
-  required?: boolean;
-  rows?: number;
-}
 
 interface SaaSColumnItem {
   key: string;
@@ -97,7 +84,6 @@ interface SaaSPageMeta {
   documentNotes?: readonly string[];
   exceptions?: readonly string[];
   fields?: readonly SaaSFieldItem[];
-  filters: readonly SaaSFilterField[];
   pageGoal: string;
   pendingItems?: readonly string[];
   permissionPoints?: readonly string[];
@@ -123,10 +109,6 @@ interface BaseActionFieldInput extends BaseFieldInput {
   note: string;
 }
 
-interface BaseFilterInput extends BaseFieldInput {
-  placeholder?: string;
-}
-
 function createSelectField(
   input: BaseActionFieldInput & {
     options: readonly FieldOption[];
@@ -138,62 +120,26 @@ function createSelectField(
   };
 }
 
-function createSelectFilter(
-  input: BaseFilterInput & {
-    options: readonly FieldOption[];
-  },
-): SaaSFilterField {
-  return {
-    ...input,
-    inputType: 'select',
-    placeholder: input.placeholder ?? `请选择${input.label}`,
-  };
-}
-
-function createTextareaField(
-  input: BaseActionFieldInput & {
-    rows?: number;
-  },
-): SaaSFieldItem {
-  return {
-    ...input,
-    inputType: 'textarea',
-  };
-}
-
-function createTextField(input: BaseActionFieldInput): SaaSFieldItem {
-  return {
-    ...input,
-    inputType: 'text',
-  };
-}
-
-function createTextFilter(input: BaseFilterInput): SaaSFilterField {
-  return {
-    ...input,
-    inputType: 'text',
-    placeholder: input.placeholder ?? `请输入${input.label}`,
-  };
-}
-
-const storeTypeOptions = [
-  { label: '景区门店', value: '景区门店' },
-  { label: '零售门店', value: '零售门店' },
+const benefitNameOptions = [
+  { label: '高级营销权益', value: '高级营销权益' },
+  { label: '多门店联营权益', value: '多门店联营权益' },
 ] as const;
 
-const tenantStatusOptions = [
-  { label: '启用', value: '启用' },
-  { label: '停用', value: '停用' },
+const benefitStatusOptions = [
+  { label: '生效中', value: '生效中' },
+  { label: '已到期', value: '已到期' },
+  { label: '已关闭', value: '已关闭' },
+] as const;
+
+const sampleStoreOptions = [
+  { label: '欢乐谷东区店', value: '欢乐谷东区店' },
+  { label: '欢乐谷西区店', value: '欢乐谷西区店' },
+  { label: '海岸线游客中心', value: '海岸线游客中心' },
 ] as const;
 
 type PageInteractions = Pick<
   SaaSPageMeta,
-  | 'actions'
-  | 'columns'
-  | 'filters'
-  | 'rowActions'
-  | 'sampleData'
-  | 'supportActions'
+  'actions' | 'columns' | 'rowActions' | 'sampleData' | 'supportActions'
 >;
 type PageExplanations = Pick<
   SaaSPageMeta,
@@ -209,17 +155,16 @@ type PageExplanations = Pick<
 >;
 
 type InteractionItem = SaaSActionItem;
-type FormFieldItem = SaaSFieldItem | SaaSFilterField;
-type VersionStatus = '停用' | '启用';
+type FormFieldItem = SaaSFieldItem;
+type BenefitStatus = '已关闭' | '已到期' | '生效中';
 
-interface VersionRecord {
-  featureScope: string;
+interface BenefitRecord {
+  benefitName: string;
+  endAt: string;
   id: string;
-  status: VersionStatus;
-  storeType: string;
-  updatedAt: string;
-  versionDesc: string;
-  versionName: string;
+  startAt: string;
+  status: BenefitStatus;
+  storeName: string;
 }
 
 const interactions = createInteractions();
@@ -232,17 +177,17 @@ const detailExplanationVisible = ref(false);
 const detailVisible = ref(false);
 const explanationVisible = ref(false);
 const filterState = ref({
+  benefitName: '',
   status: '',
-  storeType: '',
-  versionName: '',
+  storeName: '',
 });
 const pageSize = ref(10);
-const selectedVersionId = ref('');
-const versionData = ref<VersionRecord[]>(
-  interactions.sampleData.map((item) => normalizeVersionRecord(item)),
+const selectedBenefitId = ref('');
+const benefitData = ref<BenefitRecord[]>(
+  interactions.sampleData.map((item) => normalizeBenefitRecord(item)),
 );
 
-const pageTitle = computed(() => String(route.meta.title ?? '门店版本管理'));
+const pageTitle = computed(() => String(route.meta.title ?? '门店权益管理'));
 const pagePriority = computed(() => String(route.meta.priority ?? 'P0'));
 const actionCatalog = computed<InteractionItem[]>(() => [
   ...interactions.actions,
@@ -251,59 +196,54 @@ const actionCatalog = computed<InteractionItem[]>(() => [
 const activeInteraction = computed(() =>
   actionCatalog.value.find((item) => item.label === activeAction.value),
 );
-const selectedVersion = computed(
+const selectedBenefit = computed(
   () =>
-    versionData.value.find((item) => item.id === selectedVersionId.value) ??
+    benefitData.value.find((item) => item.id === selectedBenefitId.value) ??
     null,
 );
-const isCreateMode = computed(() => activeAction.value === '新建版本');
-const isMaintainMode = computed(() => activeAction.value === '版本说明维护');
-const isViewMode = computed(() => activeAction.value === '查看版本');
-const isEditMode = computed(() => activeAction.value === '编辑版本');
-const isDisableMode = computed(() => activeAction.value === '停用');
+const isPurchaseMode = computed(() => activeAction.value === '购买权益');
+const isRenewMode = computed(
+  () => activeAction.value === '续期权益' || activeAction.value === '续期',
+);
+const isCloseMode = computed(() => activeAction.value === '关闭权益');
+const isViewMode = computed(() => activeAction.value === '查看有效期');
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
 const showResetButton = computed(
-  () => isCreateMode.value || isMaintainMode.value || isEditMode.value,
+  () => isPurchaseMode.value || isRenewMode.value,
 );
 const showSubmitButton = computed(
-  () =>
-    isCreateMode.value ||
-    isMaintainMode.value ||
-    isEditMode.value ||
-    isDisableMode.value,
+  () => isPurchaseMode.value || isRenewMode.value || isCloseMode.value,
 );
 const submitButtonText = computed(() => {
-  if (isDisableMode.value) {
-    return '确认停用';
+  if (isRenewMode.value) {
+    return '确认续期';
   }
-  if (isMaintainMode.value) {
-    return '确认维护';
+  if (isCloseMode.value) {
+    return '确认关闭';
   }
   return '保存';
 });
-const filteredVersions = computed(() => {
-  const versionName = filterState.value.versionName.trim().toLowerCase();
-  const storeType = filterState.value.storeType;
+const filteredBenefits = computed(() => {
+  const storeName = filterState.value.storeName.trim().toLowerCase();
+  const benefitName = filterState.value.benefitName;
   const status = filterState.value.status;
 
-  return versionData.value.filter((item) => {
-    const matchVersionName =
-      !versionName ||
-      item.versionName.toLowerCase().includes(versionName) ||
-      item.versionDesc.toLowerCase().includes(versionName);
-    const matchStoreType = !storeType || item.storeType === storeType;
+  return benefitData.value.filter((item) => {
+    const matchStoreName =
+      !storeName || item.storeName.toLowerCase().includes(storeName);
+    const matchBenefitName = !benefitName || item.benefitName === benefitName;
     const matchStatus = !status || item.status === status;
 
-    return matchVersionName && matchStoreType && matchStatus;
+    return matchStoreName && matchBenefitName && matchStatus;
   });
 });
 const tableData = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
   const end = start + pageSize.value;
 
-  return filteredVersions.value.slice(start, end);
+  return filteredBenefits.value.slice(start, end);
 });
 const explanationFieldsData = computed(() =>
   (explanations.fields ?? []).map((item) => ({ ...item })),
@@ -314,30 +254,6 @@ const explanationStatusTransitionData = computed(() =>
 const activeInteractionFieldsData = computed(() =>
   (activeInteraction.value?.fields ?? []).map((item) => ({ ...item })),
 );
-
-const [FilterForm] = useVbenForm({
-  actionLayout: 'newLine',
-  actionPosition: 'right',
-  actionWrapperClass: 'pt-3 flex-wrap gap-3',
-  commonConfig: {
-    componentProps: {
-      class: 'w-full',
-    },
-  },
-  compact: true,
-  handleReset: handleFilterReset,
-  handleSubmit: handleFilterSubmit,
-  layout: 'vertical',
-  resetButtonOptions: {
-    content: '重置筛选',
-  },
-  schema: buildFilterSchema(interactions.filters),
-  showDefaultActions: true,
-  submitButtonOptions: {
-    content: '查询',
-  },
-  wrapperClass: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
-});
 
 const [DetailActionForm, detailActionFormApi] = useVbenForm({
   commonConfig: {
@@ -496,10 +412,6 @@ function buildDefaultValues(fields: readonly FormFieldItem[] = []) {
   );
 }
 
-function buildFilterSchema(fields: readonly SaaSFilterField[]) {
-  return fields.map((field, index) => buildFieldSchema(field, index));
-}
-
 function buildInteractionSchema(interaction?: InteractionItem) {
   return (interaction?.fields ?? []).map((field, index) =>
     buildFieldSchema(field, index, {
@@ -525,48 +437,41 @@ function populateInteractionForm(values: Record<string, any>) {
   void detailActionFormApi.resetValidate();
 }
 
-function getCurrentDateTime() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = `${now.getMonth() + 1}`.padStart(2, '0');
-  const day = `${now.getDate()}`.padStart(2, '0');
-  const hours = `${now.getHours()}`.padStart(2, '0');
-  const minutes = `${now.getMinutes()}`.padStart(2, '0');
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-}
-
-function normalizeVersionRecord(record: Record<string, string>): VersionRecord {
+function normalizeBenefitRecord(record: Record<string, string>): BenefitRecord {
   return {
-    featureScope: record.featureScope ?? '',
-    id: record.id ?? `version-${Math.random().toString(36).slice(2, 10)}`,
-    status: (record.status as VersionStatus) ?? '启用',
-    storeType: record.storeType ?? '',
-    updatedAt: record.updatedAt ?? getCurrentDateTime(),
-    versionDesc: record.versionDesc ?? record.featureScope ?? '',
-    versionName: record.versionName ?? '',
+    benefitName: record.benefitName ?? '',
+    endAt: record.endAt ?? '',
+    id: record.id ?? `benefit-${Math.random().toString(36).slice(2, 10)}`,
+    startAt: record.startAt ?? '',
+    status: (record.status as BenefitStatus) ?? '生效中',
+    storeName: record.storeName ?? '',
   };
 }
 
-function getVersionRow(row: Record<string, any>): VersionRecord {
-  return normalizeVersionRecord(row);
+function getBenefitRow(row: Record<string, any>): BenefitRecord {
+  return normalizeBenefitRecord(row);
 }
 
-function getCellValue(row: VersionRecord, key: string) {
-  return row[key as keyof VersionRecord] ?? '-';
+function getCellValue(row: BenefitRecord, key: string) {
+  return row[key as keyof BenefitRecord] ?? '-';
 }
 
-function getStatusTagType(status: VersionStatus) {
-  return status === '启用' ? 'success' : 'info';
+function getStatusTagType(status: BenefitStatus) {
+  if (status === '生效中') {
+    return 'success';
+  }
+  if (status === '已到期') {
+    return 'warning';
+  }
+  return 'info';
 }
 
-function updateVersionRecord(id: string, patch: Partial<VersionRecord>) {
-  versionData.value = versionData.value.map((item) =>
+function updateBenefitRecord(id: string, patch: Partial<BenefitRecord>) {
+  benefitData.value = benefitData.value.map((item) =>
     item.id === id
       ? {
           ...item,
           ...patch,
-          updatedAt: getCurrentDateTime(),
         }
       : item,
   );
@@ -578,61 +483,49 @@ function closeDetailDrawer() {
 
 function openAction(action: InteractionItem) {
   activeAction.value = action.label;
-  selectedVersionId.value = '';
+  selectedBenefitId.value = '';
   detailVisible.value = true;
   applyInteractionForm(action);
 }
 
 function handleRowAction(action: InteractionItem, row: Record<string, any>) {
-  const currentRow = getVersionRow(row);
+  const currentRow = getBenefitRow(row);
   activeAction.value = action.label;
-  selectedVersionId.value = currentRow.id;
+  selectedBenefitId.value = currentRow.id;
   detailVisible.value = true;
   applyInteractionForm(action);
 
-  if (action.label === '编辑版本' || action.label === '版本说明维护') {
+  if (action.label === '续期') {
     populateInteractionForm({
-      featureScope: currentRow.featureScope,
-      status: currentRow.status,
-      storeType: currentRow.storeType,
-      versionDesc: currentRow.versionDesc,
-      versionName: currentRow.versionName,
+      benefitName: currentRow.benefitName,
+      storeName: currentRow.storeName,
     });
   }
 }
 
-function handleFilterSubmit(values: Record<string, any>) {
+function handleFilterSubmit() {
   filterState.value = {
-    status: String(values.status ?? '').trim(),
-    storeType: String(values.storeType ?? '').trim(),
-    versionName: String(values.versionName ?? '').trim(),
+    storeName: filterState.value.storeName.trim(),
+    benefitName: filterState.value.benefitName.trim(),
+    status: filterState.value.status.trim(),
   };
   currentPage.value = 1;
 }
 
 function handleFilterReset() {
   filterState.value = {
+    benefitName: '',
     status: '',
-    storeType: '',
-    versionName: '',
+    storeName: '',
   };
   currentPage.value = 1;
 }
 
 function resetActiveForm() {
-  if (isEditMode.value || isMaintainMode.value) {
-    const currentVersion = selectedVersion.value;
-    if (!currentVersion) {
-      applyInteractionForm(activeInteraction.value);
-      return;
-    }
-
+  if (isRenewMode.value && selectedBenefit.value) {
     populateInteractionForm({
-      featureScope: currentVersion.featureScope,
-      status: currentVersion.status,
-      storeType: currentVersion.storeType,
-      versionDesc: currentVersion.versionDesc,
-      versionName: currentVersion.versionName,
+      benefitName: selectedBenefit.value.benefitName,
+      storeName: selectedBenefit.value.storeName,
     });
     return;
   }
@@ -640,123 +533,116 @@ function resetActiveForm() {
   applyInteractionForm(activeInteraction.value);
 }
 
-async function createVersion(values: Record<string, any>) {
-  const storeType = String(values.storeType ?? '').trim();
-  const versionName = String(values.versionName ?? '').trim();
-  const versionDesc = String(values.versionDesc ?? '').trim();
-  const featureScope = String(values.featureScope ?? '').trim();
-  const status = String(values.status ?? '启用').trim() as VersionStatus;
+async function purchaseBenefit(values: Record<string, any>) {
+  const storeName = String(values.storeName ?? '').trim();
+  const benefitName = String(values.benefitName ?? '').trim();
+  const startAt = String(values.startAt ?? '').trim();
+  const endAt = String(values.endAt ?? '').trim();
 
-  if (!storeType || !versionName || !featureScope || !status) {
-    ElMessage.warning('请先完善版本信息');
+  if (!storeName || !benefitName || !startAt || !endAt) {
+    ElMessage.warning('请先完善权益信息');
     return;
   }
 
-  const duplicated = versionData.value.some(
-    (item) => item.storeType === storeType && item.versionName === versionName,
+  if (startAt > endAt) {
+    ElMessage.warning('到期时间不能早于生效时间');
+    return;
+  }
+
+  const duplicated = benefitData.value.some(
+    (item) =>
+      item.storeName === storeName &&
+      item.benefitName === benefitName &&
+      item.status === '生效中',
   );
   if (duplicated) {
-    ElMessage.warning('同一门店类型下已存在同名版本');
+    ElMessage.warning('当前门店已存在生效中的同类权益');
     return;
   }
 
-  versionData.value = [
-    normalizeVersionRecord({
-      featureScope,
-      status,
-      storeType,
-      updatedAt: getCurrentDateTime(),
-      versionDesc: versionDesc || featureScope,
-      versionName,
+  benefitData.value = [
+    normalizeBenefitRecord({
+      benefitName,
+      endAt,
+      startAt,
+      status: '生效中',
+      storeName,
     }),
-    ...versionData.value,
+    ...benefitData.value,
   ];
   currentPage.value = 1;
-  ElMessage.success(`已新建版本：${versionName}`);
+  ElMessage.success(`已为 ${storeName} 购买权益：${benefitName}`);
   closeDetailDrawer();
 }
 
-async function updateVersion(values: Record<string, any>, successText: string) {
-  if (!selectedVersion.value) {
-    ElMessage.warning('未找到当前版本，请重新选择');
+async function renewBenefit(values: Record<string, any>) {
+  const benefitName = String(values.benefitName ?? '').trim();
+  const renewWindow = values.renewWindow as string[] | undefined;
+
+  if (!selectedBenefit.value) {
+    ElMessage.warning('未找到当前权益，请重新选择');
     closeDetailDrawer();
     return;
   }
 
-  const storeType = String(values.storeType ?? '').trim();
-  const versionName = String(values.versionName ?? '').trim();
-  const versionDesc = String(values.versionDesc ?? '').trim();
-  const featureScope = String(values.featureScope ?? '').trim();
-  const status = String(
-    values.status ?? selectedVersion.value.status,
-  ).trim() as VersionStatus;
-
-  if (!storeType || !versionName || !featureScope || !status) {
-    ElMessage.warning('请先完善版本信息');
+  if (!benefitName || !renewWindow || renewWindow.length !== 2) {
+    ElMessage.warning('请先选择续期时间段');
     return;
   }
 
-  const duplicated = versionData.value.some(
-    (item) =>
-      item.id !== selectedVersion.value?.id &&
-      item.storeType === storeType &&
-      item.versionName === versionName,
-  );
-  if (duplicated) {
-    ElMessage.warning('同一门店类型下已存在同名版本');
+  const [startAt, endAt] = renewWindow;
+  if (!startAt || !endAt || startAt > endAt) {
+    ElMessage.warning('续期时间段无效，请重新选择');
     return;
   }
 
-  updateVersionRecord(selectedVersion.value.id, {
-    featureScope,
-    status,
-    storeType,
-    versionDesc: versionDesc || featureScope,
-    versionName,
+  updateBenefitRecord(selectedBenefit.value.id, {
+    benefitName,
+    endAt,
+    startAt:
+      selectedBenefit.value.startAt > startAt
+        ? selectedBenefit.value.startAt
+        : startAt,
+    status: '生效中',
   });
-  ElMessage.success(successText);
+  ElMessage.success(`已续期权益：${selectedBenefit.value.benefitName}`);
   closeDetailDrawer();
 }
 
-async function disableVersion() {
-  if (!selectedVersion.value) {
-    ElMessage.warning('未找到当前版本，请重新选择');
+async function closeBenefit() {
+  if (!selectedBenefit.value) {
+    ElMessage.warning('未找到当前权益，请重新选择');
     closeDetailDrawer();
     return;
   }
 
-  if (selectedVersion.value.status === '停用') {
-    ElMessage.warning('当前版本已停用，无需重复操作');
+  if (selectedBenefit.value.status === '已关闭') {
+    ElMessage.warning('当前权益已关闭，无需重复操作');
     closeDetailDrawer();
     return;
   }
 
-  updateVersionRecord(selectedVersion.value.id, {
-    status: '停用',
+  updateBenefitRecord(selectedBenefit.value.id, {
+    status: '已关闭',
   });
-  ElMessage.success(`已停用版本：${selectedVersion.value.versionName}`);
+  ElMessage.success(`已关闭权益：${selectedBenefit.value.benefitName}`);
   closeDetailDrawer();
 }
 
 async function handleDetailSubmit(values: Record<string, any>) {
-  if (isCreateMode.value) {
-    await createVersion(values);
+  if (isPurchaseMode.value) {
+    await purchaseBenefit(values);
     return;
   }
 
-  if (isMaintainMode.value) {
-    await updateVersion(values, '版本说明维护完成');
-    return;
-  }
-
-  if (isEditMode.value) {
-    await updateVersion(values, '版本信息已更新');
+  if (isRenewMode.value) {
+    await renewBenefit(values);
   }
 }
 
 async function submitActiveAction() {
-  if (isDisableMode.value) {
-    await disableVersion();
+  if (isCloseMode.value) {
+    await closeBenefit();
     return;
   }
 
@@ -776,7 +662,7 @@ watch(detailVisible, (visible) => {
   if (!visible) {
     activeAction.value = '';
     detailExplanationVisible.value = false;
-    selectedVersionId.value = '';
+    selectedBenefitId.value = '';
     applyInteractionForm();
   }
 });
@@ -785,206 +671,148 @@ function createInteractions(): PageInteractions {
   return {
     actions: [
       {
-        label: '新建版本',
+        label: '购买权益',
         type: 'primary',
-        description: '为指定门店类型创建新的版本能力包。',
+        description: '为门店购买指定权益并设置生效与到期时间。',
         fields: [
           createSelectField({
-            field: 'storeType',
-            label: '适用门店类型',
-            note: '不同类型可配置不同版本',
-            options: storeTypeOptions,
+            field: 'storeName',
+            label: '所属门店',
+            note: '权益绑定门店',
+            options: sampleStoreOptions,
             required: true,
-          }),
-          createTextField({
-            field: 'versionName',
-            label: '版本名称',
-            note: '例如基础版、专业版、旗舰版',
-            required: true,
-          }),
-          createTextareaField({
-            field: 'versionDesc',
-            label: '版本说明',
-            note: '用于概述版本定位和差异',
-            rows: 3,
-          }),
-          createTextareaField({
-            field: 'featureScope',
-            label: '功能边界说明',
-            note: '版本包含的功能范围说明',
-            required: true,
-            rows: 4,
           }),
           createSelectField({
-            field: 'status',
-            label: '状态',
-            note: '启用后可被门店切换使用',
-            options: tenantStatusOptions,
+            field: 'benefitName',
+            label: '权益名称',
+            note: '权益标识名称',
+            options: benefitNameOptions,
             required: true,
           }),
+          {
+            field: 'startAt',
+            inputType: 'date',
+            label: '生效时间',
+            note: '权益开始时间',
+            required: true,
+          },
+          {
+            field: 'endAt',
+            inputType: 'date',
+            label: '到期时间',
+            note: '权益结束时间',
+            required: true,
+          },
         ],
-        goal: '建立可供门店切换使用的版本配置。',
-        permissionPoints: ['配置'],
+        goal: '完成权益购买并开放对应功能入口。',
+        permissionPoints: ['购买'],
         processSteps: [
-          '选择适用门店类型。',
-          '填写版本名称、版本说明和功能边界。',
-          '确认状态后保存，版本进入列表。',
+          '选择所属门店和权益名称。',
+          '设置生效时间与到期时间。',
+          '保存后权益立即进入门店列表。',
         ],
       },
       {
-        label: '版本说明维护',
-        type: 'info',
-        description: '维护版本说明和功能边界说明，帮助门店切换时明确差异。',
+        label: '续期权益',
+        type: 'success',
+        description: '对已到期或即将到期权益进行叠加续期。',
         fields: [
           createSelectField({
-            field: 'storeType',
-            label: '适用门店类型',
-            note: '用于定位需要维护的版本',
-            options: storeTypeOptions,
+            field: 'benefitName',
+            label: '权益名称',
+            note: '选择需续期的权益',
+            options: benefitNameOptions,
             required: true,
           }),
-          createTextField({
-            field: 'versionName',
-            label: '版本名称',
-            note: '建议与线上版本名称保持一致',
+          {
+            field: 'renewWindow',
+            inputType: 'daterange',
+            label: '续期时间段',
+            note: '用于延长权益有效期',
             required: true,
-          }),
-          createTextareaField({
-            field: 'versionDesc',
-            label: '版本说明',
-            note: '帮助业务快速理解版本定位',
-            rows: 3,
-          }),
-          createTextareaField({
-            field: 'featureScope',
-            label: '功能边界说明',
-            note: '明确版本包含的功能范围',
-            required: true,
-            rows: 4,
-          }),
-          createSelectField({
-            field: 'status',
-            label: '状态',
-            note: '同步维护版本启停状态',
-            options: tenantStatusOptions,
-            required: true,
-          }),
+          },
         ],
-        goal: '保持版本文档和配置口径一致。',
-        permissionPoints: ['配置'],
+        documentNotes: ['续期支持叠加购买，延长到期时间。'],
+        goal: '延长门店权益有效期。',
+        permissionPoints: ['续期'],
+      },
+      {
+        label: '关闭权益',
+        type: 'danger',
+        description: '手动关闭权益并关闭对应功能入口。',
+        goal: '停止门店继续使用某项权益能力。',
+        permissionPoints: ['关闭'],
       },
     ],
     columns: [
-      { key: 'versionName', label: '版本名称' },
-      { key: 'storeType', label: '适用门店类型' },
-      { key: 'featureScope', label: '功能边界说明' },
-      { key: 'status', label: '状态' },
-      { key: 'updatedAt', label: '更新时间' },
-    ],
-    filters: [
-      createTextFilter({
-        field: 'versionName',
-        label: '版本名称',
-        placeholder: '请输入版本名称或版本说明',
-      }),
-      createSelectFilter({
-        field: 'storeType',
-        label: '门店类型',
-        options: storeTypeOptions,
-      }),
-      createSelectFilter({
-        field: 'status',
-        label: '状态',
-        options: tenantStatusOptions,
-      }),
+      { key: 'storeName', label: '所属门店' },
+      { key: 'benefitName', label: '权益名称' },
+      { key: 'startAt', label: '生效时间' },
+      { key: 'endAt', label: '到期时间' },
+      { key: 'status', label: '权益状态' },
     ],
     rowActions: [
       {
-        label: '查看版本',
-        description: '查看版本能力边界与适用门店类型。',
-        goal: '确认版本范围是否满足业务需求。',
+        label: '查看有效期',
+        description: '查看当前权益的生效、到期和状态信息。',
+        goal: '掌握权益生命周期。',
         permissionPoints: ['查看'],
       },
       {
-        label: '编辑版本',
-        type: 'warning',
-        description: '更新版本说明、状态或功能边界。',
+        label: '续期',
+        type: 'success',
+        description: '针对当前权益直接发起续期。',
         fields: [
           createSelectField({
-            field: 'storeType',
-            label: '适用门店类型',
-            note: '不同类型可配置不同版本',
-            options: storeTypeOptions,
+            field: 'benefitName',
+            label: '权益名称',
+            note: '选择需续期的权益',
+            options: benefitNameOptions,
             required: true,
           }),
-          createTextField({
-            field: 'versionName',
-            label: '版本名称',
-            note: '建议与业务命名保持一致',
+          {
+            field: 'renewWindow',
+            inputType: 'daterange',
+            label: '续期时间段',
+            note: '用于延长权益有效期',
             required: true,
-          }),
-          createTextareaField({
-            field: 'versionDesc',
-            label: '版本说明',
-            note: '用于概述版本定位和差异',
-            rows: 3,
-          }),
-          createTextareaField({
-            field: 'featureScope',
-            label: '功能边界说明',
-            note: '版本包含的功能范围说明',
-            required: true,
-            rows: 4,
-          }),
-          createSelectField({
-            field: 'status',
-            label: '状态',
-            note: '启用后可被门店切换使用',
-            options: tenantStatusOptions,
-            required: true,
-          }),
+          },
         ],
-        goal: '持续维护版本能力定义。',
-        permissionPoints: ['配置'],
+        goal: '延长当前权益到期时间。',
+        permissionPoints: ['续期'],
       },
       {
-        label: '停用',
+        label: '关闭权益',
         type: 'danger',
-        description: '停用版本后该版本不可再被新增配置。',
-        documentNotes: [
-          '停用不会删除历史绑定记录，但新门店将不能继续选择该版本。',
-        ],
-        goal: '关闭不再维护的版本。',
-        permissionPoints: ['配置'],
+        description: '人工关闭当前权益。',
+        goal: '停用指定权益能力。',
+        permissionPoints: ['关闭'],
       },
     ],
     sampleData: [
       {
-        featureScope: '支持票务、核销、会员、营销活动',
-        id: 'version-001',
-        status: '启用',
-        storeType: '景区门店',
-        updatedAt: '2026-07-04 16:20',
-        versionDesc: '适合大型景区门店的完整经营版本',
-        versionName: '旗舰版',
+        benefitName: '高级营销权益',
+        endAt: '2026-12-31',
+        id: 'benefit-001',
+        startAt: '2026-01-01',
+        status: '生效中',
+        storeName: '欢乐谷东区店',
       },
       {
-        featureScope: '支持票务、核销、基础报表',
-        id: 'version-002',
-        status: '停用',
-        storeType: '游客中心',
-        updatedAt: '2026-07-03 09:10',
-        versionDesc: '适合游客中心的轻量版本',
-        versionName: '基础版',
+        benefitName: '多门店联营权益',
+        endAt: '2026-06-30',
+        id: 'benefit-002',
+        startAt: '2025-07-01',
+        status: '已到期',
+        storeName: '海岸线游客中心',
       },
       {
-        featureScope: '支持票务、核销、会员、数据看板',
-        id: 'version-003',
-        status: '启用',
-        storeType: '景区门店',
-        updatedAt: '2026-07-05 13:45',
-        versionDesc: '适合标准化景区门店的增强版本',
-        versionName: '专业版',
+        benefitName: '高级营销权益',
+        endAt: '2026-08-31',
+        id: 'benefit-003',
+        startAt: '2026-03-01',
+        status: '已关闭',
+        storeName: '欢乐谷西区店',
       },
     ],
     supportActions: [],
@@ -994,48 +822,50 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理不同门店类型下的版本能力配置，覆盖版本新建、查看、编辑、停用和说明维护等动作。',
+      '管理门店权益购买、续期、关闭和有效期查看，重点覆盖权益生命周期和状态变更。',
     documentNotes: [
-      '同一门店类型下不允许创建同名版本。',
-      '停用版本后，新的门店配置不可再选中该版本。',
-      '版本说明和功能边界需保持一致，避免门店理解偏差。',
+      '同一门店同类权益在生效中时，不允许再次重复购买。',
+      '续期支持对已到期权益重新激活，也支持对生效中权益延长周期。',
+      '关闭权益后，对应功能入口应视为不可继续使用。',
     ],
     exceptions: [
-      '适用门店类型、版本名称、功能边界说明缺失时不允许保存。',
-      '已停用版本不允许重复执行停用操作。',
-      '同一门店类型下版本名称重复时不能提交。',
+      '生效时间晚于到期时间时不允许保存。',
+      '未找到当前权益记录时，续期或关闭动作不能继续。',
+      '已关闭权益不允许重复执行关闭动作。',
     ],
     fields: [
-      {
-        label: '适用门店类型',
-        note: '版本只对选定门店类型生效',
-        required: true,
-      },
-      { label: '版本名称', note: '用于区分不同能力层级版本', required: true },
-      { label: '版本说明', note: '帮助业务理解版本定位' },
-      { label: '功能边界说明', note: '明确版本包含的功能范围', required: true },
-      { label: '状态', note: '决定版本是否可被门店继续配置', required: true },
+      { label: '所属门店', note: '权益绑定的具体门店', required: true },
+      { label: '权益名称', note: '用于区分不同权益能力', required: true },
+      { label: '生效时间', note: '权益开始生效的日期', required: true },
+      { label: '到期时间', note: '权益失效的日期', required: true },
+      { label: '权益状态', note: '用于标记当前权益的有效性' },
     ],
-    pageGoal: '维护门店版本配置，并确保版本能力边界清晰、状态准确。',
-    permissionPoints: ['查看', '配置'],
+    pageGoal: '维护门店权益生命周期，并支持购买、续期、关闭等关键动作。',
+    permissionPoints: ['查看', '购买', '续期', '关闭'],
     processSteps: [
-      '通过版本名称、门店类型或状态筛选需要处理的版本。',
-      '从列表进入新建、编辑、停用或查看版本动作。',
-      '在抽屉内维护版本信息并提交。',
-      '保存后实时更新版本状态和更新时间。',
+      '通过门店名称、权益名称或状态筛选待处理权益。',
+      '从列表进入购买、续期、关闭或查看有效期动作。',
+      '在抽屉中完成时间设置或确认操作。',
+      '提交后即时更新权益状态与有效期。',
     ],
     statusTransitions: [
       {
-        current: '启用',
-        note: '停用后新门店不允许再选择该版本。',
-        target: '停用',
-        trigger: '停用',
+        current: '已到期',
+        note: '续期后重新进入生效状态。',
+        target: '生效中',
+        trigger: '续期',
       },
       {
-        current: '停用',
-        note: '当前页面暂未提供重新启用动作。',
-        target: '停用',
-        trigger: '查看版本',
+        current: '生效中',
+        note: '人工关闭后立即停止使用。',
+        target: '已关闭',
+        trigger: '关闭权益',
+      },
+      {
+        current: '生效中',
+        note: '时间自然结束后变为已到期。',
+        target: '已到期',
+        trigger: '到期',
       },
     ],
   };
@@ -1057,18 +887,67 @@ function createExplanations(): PageExplanations {
 
     <div class="flex flex-col gap-4">
       <div class="saas-filter-panel rounded-md bg-card p-3">
-        <FilterForm>
-          <template #reset-before>
-            <ElButton
-              v-for="action in interactions.actions"
-              :key="action.label"
-              :type="action.type || 'primary'"
-              @click="openAction(action)"
-            >
-              {{ action.label }}
-            </ElButton>
-          </template>
-        </FilterForm>
+        <ElForm
+          class="saas-filter-form"
+          :model="filterState"
+          label-position="left"
+          @submit.prevent="handleFilterSubmit"
+        >
+          <div class="saas-filter-grid">
+            <ElFormItem label="门店名称">
+              <ElInput
+                v-model="filterState.storeName"
+                clearable
+                placeholder="请输入门店名称"
+              />
+            </ElFormItem>
+
+            <ElFormItem label="权益名称">
+              <ElSelect
+                v-model="filterState.benefitName"
+                clearable
+                filterable
+                placeholder="请选择权益名称"
+              >
+                <ElOption
+                  v-for="option in benefitNameOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <ElFormItem label="权益状态">
+              <ElSelect
+                v-model="filterState.status"
+                clearable
+                filterable
+                placeholder="请选择权益状态"
+              >
+                <ElOption
+                  v-for="option in benefitStatusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <div class="saas-filter-actions">
+              <ElButton
+                v-for="action in interactions.actions"
+                :key="action.label"
+                :type="action.type || 'primary'"
+                @click="openAction(action)"
+              >
+                {{ action.label }}
+              </ElButton>
+              <ElButton type="primary" native-type="submit">查询</ElButton>
+              <ElButton @click="handleFilterReset">重置</ElButton>
+            </div>
+          </div>
+        </ElForm>
       </div>
 
       <div class="saas-table-panel rounded-md bg-card p-3">
@@ -1082,12 +961,12 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElTag
                 v-if="column.key === 'status'"
-                :type="getStatusTagType(getVersionRow(row).status)"
+                :type="getStatusTagType(getBenefitRow(row).status)"
               >
-                {{ getVersionRow(row).status }}
+                {{ getBenefitRow(row).status }}
               </ElTag>
               <span v-else>{{
-                getCellValue(getVersionRow(row), column.key)
+                getCellValue(getBenefitRow(row), column.key)
               }}</span>
             </template>
           </ElTable.TableColumn>
@@ -1100,8 +979,8 @@ function createExplanations(): PageExplanations {
                   :key="action.label"
                   link
                   :disabled="
-                    action.label === '停用' &&
-                    getVersionRow(row).status === '停用'
+                    action.label === '关闭权益' &&
+                    getBenefitRow(row).status === '已关闭'
                   "
                   :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
@@ -1119,7 +998,7 @@ function createExplanations(): PageExplanations {
             :page-size="pageSize"
             :page-sizes="[10, 20, 50]"
             layout="total, sizes, prev, pager, next"
-            :total="filteredVersions.length"
+            :total="filteredBenefits.length"
             @current-change="handleCurrentPageChange"
             @size-change="handlePageSizeChange"
           />
@@ -1266,22 +1145,6 @@ function createExplanations(): PageExplanations {
                 </ul>
               </div>
             </div>
-
-            <div
-              v-if="
-                explanations.pendingItems &&
-                explanations.pendingItems.length > 0
-              "
-            >
-              <div class="mb-2 text-sm font-medium">待补充项</div>
-              <ul
-                class="list-disc pl-5 text-sm leading-7 text-[var(--el-text-color-primary)]"
-              >
-                <li v-for="item in explanations.pendingItems" :key="item">
-                  {{ item }}
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
       </div>
@@ -1307,27 +1170,24 @@ function createExplanations(): PageExplanations {
         </div>
       </template>
 
-      <div v-if="isViewMode && selectedVersion" class="flex flex-col gap-4">
+      <div v-if="isViewMode && selectedBenefit" class="flex flex-col gap-4">
         <ElDescriptions :column="1" border>
-          <ElDescriptionsItem label="版本名称">
-            {{ selectedVersion.versionName }}
+          <ElDescriptionsItem label="所属门店">
+            {{ selectedBenefit.storeName }}
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="适用门店类型">
-            {{ selectedVersion.storeType }}
+          <ElDescriptionsItem label="权益名称">
+            {{ selectedBenefit.benefitName }}
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="状态">
-            <ElTag :type="getStatusTagType(selectedVersion.status)">
-              {{ selectedVersion.status }}
+          <ElDescriptionsItem label="权益状态">
+            <ElTag :type="getStatusTagType(selectedBenefit.status)">
+              {{ selectedBenefit.status }}
             </ElTag>
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="版本说明">
-            {{ selectedVersion.versionDesc || '-' }}
+          <ElDescriptionsItem label="生效时间">
+            {{ selectedBenefit.startAt }}
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="功能边界说明">
-            {{ selectedVersion.featureScope }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="更新时间">
-            {{ selectedVersion.updatedAt }}
+          <ElDescriptionsItem label="到期时间">
+            {{ selectedBenefit.endAt }}
           </ElDescriptionsItem>
         </ElDescriptions>
       </div>
@@ -1518,21 +1378,46 @@ function createExplanations(): PageExplanations {
   padding-bottom: 8px;
 }
 
-.saas-filter-panel :deep(.grid) {
-  row-gap: 4px;
+.saas-filter-form {
+  width: 100%;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3) {
-  row-gap: 12px;
-  padding-bottom: 0;
+.saas-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
+      180px,
+      1fr
+    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 12px 16px;
+  align-items: end;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3 .el-button) {
-  margin-left: 0;
+.saas-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  grid-column: 1 / -1;
+  padding-top: 2px;
 }
 
 .saas-filter-panel :deep(.el-form-item) {
   margin-bottom: 12px;
+}
+
+.saas-filter-panel :deep(.el-input),
+.saas-filter-panel :deep(.el-select) {
+  width: 100%;
+}
+
+.saas-filter-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .saas-filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .saas-table-panel {

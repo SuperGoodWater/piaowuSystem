@@ -13,36 +13,26 @@ import {
   ElDialog,
   ElDrawer,
   ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElInput,
   ElMessage,
+  ElOption,
   ElPagination,
+  ElSelect,
   ElSpace,
   ElTable,
+  ElTabPane,
+  ElTabs,
   ElTag,
 } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
 
-interface SaaSFilterField {
-  defaultValue?: boolean | number | string | string[];
-  field?: string;
-  inputType?:
-    | 'date'
-    | 'daterange'
-    | 'password'
-    | 'select'
-    | 'switch'
-    | 'text'
-    | 'textarea';
-  label: string;
-  options?: readonly { label: string; value: boolean | number | string }[];
-  placeholder: string;
-  required?: boolean;
-  rows?: number;
-}
-
 interface SaaSColumnItem {
   key: string;
   label: string;
+  minWidth?: number;
 }
 
 interface SaaSFieldItem {
@@ -97,7 +87,6 @@ interface SaaSPageMeta {
   documentNotes?: readonly string[];
   exceptions?: readonly string[];
   fields?: readonly SaaSFieldItem[];
-  filters: readonly SaaSFilterField[];
   pageGoal: string;
   pendingItems?: readonly string[];
   permissionPoints?: readonly string[];
@@ -123,10 +112,6 @@ interface BaseActionFieldInput extends BaseFieldInput {
   note: string;
 }
 
-interface BaseFilterInput extends BaseFieldInput {
-  placeholder?: string;
-}
-
 function createPasswordField(input: BaseActionFieldInput): SaaSFieldItem {
   return {
     ...input,
@@ -142,18 +127,6 @@ function createSelectField(
   return {
     ...input,
     inputType: 'select',
-  };
-}
-
-function createSelectFilter(
-  input: BaseFilterInput & {
-    options: readonly FieldOption[];
-  },
-): SaaSFilterField {
-  return {
-    ...input,
-    inputType: 'select',
-    placeholder: input.placeholder ?? `请选择${input.label}`,
   };
 }
 
@@ -175,14 +148,6 @@ function createTextField(input: BaseActionFieldInput): SaaSFieldItem {
   };
 }
 
-function createTextFilter(input: BaseFilterInput): SaaSFilterField {
-  return {
-    ...input,
-    inputType: 'text',
-    placeholder: input.placeholder ?? `请输入${input.label}`,
-  };
-}
-
 const sampleTenantOptions = [
   { label: '星河票务集团', value: '星河票务集团' },
   { label: '海岸线文旅', value: '海岸线文旅' },
@@ -195,18 +160,16 @@ const storeStatusOptions = [
 ] as const;
 
 const storeTypeOptions = [
+  { label: '集团门店', value: '集团门店' },
   { label: '景区门店', value: '景区门店' },
   { label: '零售门店', value: '零售门店' },
+  { label: '餐饮门店', value: '餐饮门店' },
+  { label: 'PMS', value: 'PMS' },
 ] as const;
 
 type PageInteractions = Pick<
   SaaSPageMeta,
-  | 'actions'
-  | 'columns'
-  | 'filters'
-  | 'rowActions'
-  | 'sampleData'
-  | 'supportActions'
+  'actions' | 'columns' | 'rowActions' | 'sampleData' | 'supportActions'
 >;
 type PageExplanations = Pick<
   SaaSPageMeta,
@@ -222,17 +185,20 @@ type PageExplanations = Pick<
 >;
 
 type InteractionItem = SaaSActionItem;
-type FormFieldItem = SaaSFieldItem | SaaSFilterField;
+type FormFieldItem = SaaSFieldItem;
 type StoreStatus = '停用' | '启用' | '过期';
 
 interface StoreRecord {
   address: string;
+  authorizationExpireAt: string;
   createdAt: string;
   detailAddress: string;
   id: string;
   managerPhone: string;
   managerUsername: string;
+  payRate: string;
   status: StoreStatus;
+  storeCode: string;
   storeName: string;
   storeType: string;
   tenantName: string;
@@ -255,6 +221,8 @@ const filterState = ref({
   tenantName: '',
 });
 const pageSize = ref(10);
+const maintenanceActiveTab = ref('basic');
+const maintenanceVersion = ref('');
 const selectedStoreId = ref('');
 const storeData = ref<StoreRecord[]>(
   interactions.sampleData.map((item) => normalizeStoreRecord(item)),
@@ -272,51 +240,22 @@ const selectedStore = computed(
 );
 const activeInteraction = computed(() => {
   const baseAction = actionCatalog.value.find(
-    (item) =>
-      item.label ===
-      (activeAction.value === '启用' ? '停用' : activeAction.value),
+    (item) => item.label === activeAction.value,
   );
 
   if (!baseAction) {
     return undefined;
   }
 
-  if (activeAction.value === '启用') {
-    return createStoreStatusAction(baseAction, '停用');
-  }
-
   return baseAction;
 });
 const isCreateMode = computed(() => activeAction.value === '新建门店');
-const isViewMode = computed(() => activeAction.value === '查看详情');
-const isSwitchVersionMode = computed(() => activeAction.value === '切换版本');
-const isDisableMode = computed(() => activeAction.value === '停用');
-const isEnableMode = computed(() => activeAction.value === '启用');
+const isMaintenanceMode = computed(() => activeAction.value === '维护');
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
-const showResetButton = computed(
-  () => isCreateMode.value || isSwitchVersionMode.value,
-);
-const showSubmitButton = computed(
-  () =>
-    isCreateMode.value ||
-    isSwitchVersionMode.value ||
-    isDisableMode.value ||
-    isEnableMode.value,
-);
-const submitButtonText = computed(() => {
-  if (isSwitchVersionMode.value) {
-    return '确认切换';
-  }
-  if (isDisableMode.value) {
-    return '确认停用';
-  }
-  if (isEnableMode.value) {
-    return '确认启用';
-  }
-  return '保存';
-});
+const showResetButton = computed(() => isCreateMode.value);
+const showSubmitButton = computed(() => isCreateMode.value);
 const filteredStores = computed(() => {
   const name = filterState.value.storeName.trim().toLowerCase();
   const tenantName = filterState.value.tenantName;
@@ -351,30 +290,9 @@ const explanationStatusTransitionData = computed(() =>
 const activeInteractionFieldsData = computed(() =>
   (activeInteraction.value?.fields ?? []).map((item) => ({ ...item })),
 );
-
-const [FilterForm] = useVbenForm({
-  actionLayout: 'newLine',
-  actionPosition: 'right',
-  actionWrapperClass: 'pt-3 flex-wrap gap-3',
-  commonConfig: {
-    componentProps: {
-      class: 'w-full',
-    },
-  },
-  compact: true,
-  handleReset: handleFilterReset,
-  handleSubmit: handleFilterSubmit,
-  layout: 'vertical',
-  resetButtonOptions: {
-    content: '重置',
-  },
-  schema: buildFilterSchema(interactions.filters),
-  showDefaultActions: true,
-  submitButtonOptions: {
-    content: '查询',
-  },
-  wrapperClass: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
-});
+const maintenanceFeatureItems = computed(() =>
+  getVersionFeatureItems(selectedStore.value?.version ?? ''),
+);
 
 const [DetailActionForm, detailActionFormApi] = useVbenForm({
   commonConfig: {
@@ -533,10 +451,6 @@ function buildDefaultValues(fields: readonly FormFieldItem[] = []) {
   );
 }
 
-function buildFilterSchema(filters: readonly SaaSFilterField[] = []) {
-  return filters.map((filter, index) => buildFieldSchema(filter, index));
-}
-
 function buildInteractionSchema(interaction?: InteractionItem) {
   return (interaction?.fields ?? []).map((field, index) =>
     buildFieldSchema(field, index, { includeRules: true }),
@@ -566,15 +480,37 @@ function getCurrentDateTime() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
 
+function getDefaultAuthorizationExpireAt() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const nextYear = now.getFullYear() + 1;
+
+  return `${nextYear}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function generateStoreCode() {
+  const maxNumber = storeData.value.reduce((max, item) => {
+    const match = item.storeCode.match(/^ST(\d+)$/);
+
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+
+  return `ST${String(maxNumber + 1).padStart(4, '0')}`;
+}
+
 function normalizeStoreRecord(record: Record<string, string>): StoreRecord {
   return {
     address: record.address ?? '待补充地址',
+    authorizationExpireAt:
+      record.authorizationExpireAt ?? getDefaultAuthorizationExpireAt(),
     createdAt: record.createdAt ?? getCurrentDateTime(),
     detailAddress: record.detailAddress ?? '待补充详细地址',
     id: record.id ?? `store-${Math.random().toString(36).slice(2, 10)}`,
     managerPhone: record.managerPhone ?? '',
     managerUsername: record.managerUsername ?? record.managerPhone ?? '',
+    payRate: record.payRate ?? '0.60%',
     status: (record.status as StoreStatus) || '启用',
+    storeCode: record.storeCode ?? 'ST0000',
     storeName: record.storeName ?? '',
     storeType: record.storeType ?? '',
     tenantName: record.tenantName ?? '',
@@ -602,50 +538,36 @@ function getStatusTagType(status: StoreStatus) {
   }
 }
 
+function getVersionFeatureItems(version: string) {
+  switch (version) {
+    case '专业版':
+      return ['标准门店管理', '票务订单管理', '基础数据报表', '消息通知'];
+    case '旗舰版':
+      return [
+        '全量门店管理',
+        '高级票务策略',
+        '多渠道经营分析',
+        '自动化消息通知',
+        '专属运营支持',
+      ];
+    case '基础版':
+    default:
+      return ['基础门店资料', '基础订单查看', '管理员账号维护'];
+  }
+}
+
 function openAction(action: InteractionItem, row?: StoreRecord) {
   activeAction.value = action.label;
   selectedStoreId.value = row?.id ?? '';
+  maintenanceActiveTab.value = 'basic';
+  maintenanceVersion.value = row?.version ?? '';
   applyInteractionForm(action);
   detailVisible.value = true;
 }
 
 function handleRowAction(action: InteractionItem, row: Record<string, any>) {
   const storeRow = getStoreRow(row);
-  openAction(createStoreStatusAction(action, storeRow.status), storeRow);
-}
-
-function createStoreStatusAction(
-  action: InteractionItem,
-  status: StoreStatus,
-): InteractionItem {
-  if (action.label !== '停用') {
-    return action;
-  }
-
-  if (status !== '启用') {
-    return {
-      ...action,
-      description: '启用后，门店将继续使用业务能力。',
-      goal: '启用门店继续使用业务能力。',
-      label: '启用',
-      permissionPoints: ['启用'],
-      type: 'success',
-    };
-  }
-
-  return action;
-}
-
-function getToggleActionLabel(action: InteractionItem, row: StoreRecord) {
-  if (action.label !== '停用') {
-    return action.label;
-  }
-
-  return row.status === '启用' ? '停用' : '启用';
-}
-
-function getToggleActionType(action: InteractionItem, row: StoreRecord) {
-  return createStoreStatusAction(action, row.status).type || 'primary';
+  openAction(action, storeRow);
 }
 
 function closeDetailDrawer() {
@@ -663,12 +585,12 @@ function updateStoreRecord(id: string, patch: Partial<StoreRecord>) {
   return target;
 }
 
-function handleFilterSubmit(values: Record<string, any>) {
+function handleFilterSubmit() {
   filterState.value = {
-    status: String(values.status ?? '').trim(),
-    storeName: String(values.storeName ?? '').trim(),
-    storeType: String(values.storeType ?? '').trim(),
-    tenantName: String(values.tenantName ?? '').trim(),
+    storeName: filterState.value.storeName.trim(),
+    tenantName: filterState.value.tenantName.trim(),
+    storeType: filterState.value.storeType.trim(),
+    status: filterState.value.status.trim(),
   };
   currentPage.value = 1;
 }
@@ -721,12 +643,15 @@ async function createStore(values: Record<string, any>) {
 
   storeData.value.unshift({
     address,
+    authorizationExpireAt: getDefaultAuthorizationExpireAt(),
     createdAt: getCurrentDateTime(),
     detailAddress,
     id: `store-${Date.now()}`,
     managerPhone,
     managerUsername,
+    payRate: '0.60%',
     status: '启用',
+    storeCode: generateStoreCode(),
     storeName,
     storeType,
     tenantName,
@@ -737,88 +662,65 @@ async function createStore(values: Record<string, any>) {
   closeDetailDrawer();
 }
 
-async function switchStoreVersion(values: Record<string, any>) {
+function saveMaintenanceVersion() {
   if (!selectedStore.value) {
     ElMessage.warning('未找到当前门店，请重新选择');
     return;
   }
 
-  const version = String(values.version ?? '').trim();
+  const version = maintenanceVersion.value.trim();
 
   if (!version) {
     ElMessage.warning('请选择要切换的门店版本');
     return;
   }
 
-  updateStoreRecord(selectedStore.value.id, {
-    version,
-  });
+  if (selectedStore.value.version === version) {
+    ElMessage.info('当前已是该门店版本');
+    return;
+  }
+
+  updateStoreRecord(selectedStore.value.id, { version });
   ElMessage.success(
     `已切换 ${selectedStore.value.storeName} 的版本到 ${version}`,
   );
-  closeDetailDrawer();
 }
 
-async function disableStore() {
+function toggleMaintenanceStatus() {
   if (!selectedStore.value) {
     ElMessage.warning('未找到当前门店，请重新选择');
     return;
   }
 
-  if (selectedStore.value.status === '停用') {
-    ElMessage.info('当前门店已是停用状态');
-    closeDetailDrawer();
-    return;
-  }
+  const targetStatus = selectedStore.value.status === '启用' ? '停用' : '启用';
 
   updateStoreRecord(selectedStore.value.id, {
-    status: '停用',
+    status: targetStatus,
   });
-  ElMessage.success(`已停用门店：${selectedStore.value.storeName}`);
-  closeDetailDrawer();
+  ElMessage.success(`已${targetStatus}门店：${selectedStore.value.storeName}`);
 }
 
-async function enableStore() {
-  if (!selectedStore.value) {
-    ElMessage.warning('未找到当前门店，请重新选择');
-    return;
-  }
+function getMaintenanceStatusButtonText(status: StoreStatus) {
+  return status === '启用' ? '停用门店' : '启用门店';
+}
 
-  if (selectedStore.value.status === '启用') {
-    ElMessage.info('当前门店已是启用状态');
-    closeDetailDrawer();
-    return;
-  }
+function getMaintenanceStatusButtonType(status: StoreStatus) {
+  return status === '启用' ? 'danger' : 'success';
+}
 
-  updateStoreRecord(selectedStore.value.id, {
-    status: '启用',
-  });
-  ElMessage.success(`已启用门店：${selectedStore.value.storeName}`);
-  closeDetailDrawer();
+function getMaintenanceStatusTip(status: StoreStatus) {
+  return status === '启用'
+    ? '停用后，门店业务能力将暂停使用。'
+    : '启用后，门店将继续使用业务能力。';
 }
 
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
     await createStore(values);
-    return;
-  }
-
-  if (isSwitchVersionMode.value) {
-    await switchStoreVersion(values);
   }
 }
 
 async function submitActiveAction() {
-  if (isDisableMode.value) {
-    await disableStore();
-    return;
-  }
-
-  if (isEnableMode.value) {
-    await enableStore();
-    return;
-  }
-
   await detailActionFormApi.validateAndSubmitForm();
 }
 
@@ -835,6 +737,8 @@ watch(detailVisible, (visible) => {
   if (!visible) {
     activeAction.value = '';
     detailExplanationVisible.value = false;
+    maintenanceActiveTab.value = 'basic';
+    maintenanceVersion.value = '';
     selectedStoreId.value = '';
     applyInteractionForm();
   }
@@ -911,85 +815,43 @@ function createInteractions(): PageInteractions {
       },
     ],
     columns: [
-      { key: 'storeName', label: '门店名称' },
-      { key: 'storeType', label: '门店类型' },
-      { key: 'version', label: '门店版本' },
-      { key: 'status', label: '门店状态' },
-      { key: 'managerPhone', label: '管理员手机号' },
-      { key: 'tenantName', label: '所属租户' },
-    ],
-    filters: [
-      createTextFilter({
-        field: 'storeName',
-        label: '门店名称',
-        placeholder: '请输入门店名称、管理员用户名或手机号',
-      }),
-      createSelectFilter({
-        field: 'tenantName',
-        label: '所属租户',
-        options: sampleTenantOptions,
-      }),
-      createSelectFilter({
-        field: 'storeType',
-        label: '门店类型',
-        options: storeTypeOptions,
-      }),
-      createSelectFilter({
-        field: 'status',
-        label: '门店状态',
-        options: storeStatusOptions,
-      }),
+      { key: 'storeCode', label: '门店编号', minWidth: 120 },
+      { key: 'storeName', label: '门店名称', minWidth: 160 },
+      { key: 'storeType', label: '门店类型', minWidth: 120 },
+      { key: 'version', label: '门店版本', minWidth: 120 },
+      { key: 'status', label: '门店状态', minWidth: 110 },
+      { key: 'authorizationExpireAt', label: '授权到期', minWidth: 130 },
+      { key: 'managerUsername', label: '管理员账号', minWidth: 150 },
+      { key: 'managerPhone', label: '管理员手机号', minWidth: 140 },
+      { key: 'tenantName', label: '所属租户', minWidth: 150 },
+      { key: 'createdAt', label: '创建时间', minWidth: 150 },
+      { key: 'payRate', label: '支付费率', minWidth: 110 },
     ],
     rowActions: [
       {
-        label: '查看详情',
-        description: '查看门店基础信息、版本、权益和管理员情况。',
-        goal: '快速了解门店当前配置与状态。',
-        permissionPoints: ['查看'],
-      },
-      {
-        label: '切换版本',
-        type: 'warning',
-        description: '切换门店当前使用版本，立即按新版本能力边界生效。',
-        documentNotes: ['版本切换后，被新版本屏蔽的功能将不可见或不可用。'],
-        fields: [
-          createSelectField({
-            field: 'version',
-            label: '目标版本',
-            note: '切换后立即生效',
-            options: [
-              { label: '基础版', value: '基础版' },
-              { label: '专业版', value: '专业版' },
-              { label: '旗舰版', value: '旗舰版' },
-            ],
-            required: true,
-          }),
-        ],
-        goal: '调整门店功能边界。',
-        permissionPoints: ['切换版本'],
+        label: '维护',
+        description: '维护门店基础信息、功能授权、版本和支付信息。',
+        goal: '集中维护门店当前配置与状态。',
+        permissionPoints: ['查看', '切换版本'],
         processSteps: [
-          '选择门店需要切换到的目标版本。',
-          '系统立即按新版本能力边界生效。',
-          '受新版本限制的功能将同步变化。',
+          '进入维护抽屉。',
+          '在基础信息中查看门店资料、切换版本，并处理停用或启用。',
+          '在功能授权和支付信息中确认当前配置。',
         ],
-      },
-      {
-        label: '停用',
-        type: 'danger',
-        description: '手动将门店置为停用状态。',
-        goal: '停止门店继续使用业务能力。',
-        permissionPoints: ['停用'],
       },
     ],
     sampleData: [
       {
         address: '深圳市南山区欢乐谷园区主入口',
+        authorizationExpireAt: '2027-06-30',
         createdAt: '2026-07-01 10:30',
         detailAddress: '欢乐谷东区 1 号服务中心',
         id: 'store-001',
         managerPhone: '13600009999',
         managerUsername: 'happy_valley_east',
+        payRate: '0.55%',
         status: '启用',
+        storeCode: 'ST0001',
         storeName: '欢乐谷东区店',
         storeType: '景区门店',
         tenantName: '星河票务集团',
@@ -997,29 +859,115 @@ function createInteractions(): PageInteractions {
       },
       {
         address: '青岛市市南区海岸线游客中心',
+        authorizationExpireAt: '2026-12-31',
         createdAt: '2026-07-02 15:00',
         detailAddress: '海岸线游客中心 2 楼',
         id: 'store-002',
         managerPhone: '13700008888',
         managerUsername: 'coast_visitor_center',
+        payRate: '0.68%',
         status: '过期',
+        storeCode: 'ST0002',
         storeName: '海岸线游客中心',
-        storeType: '游客中心',
+        storeType: '零售门店',
         tenantName: '海岸线文旅',
         version: '基础版',
       },
       {
         address: '广州市番禺区欢乐谷西区',
+        authorizationExpireAt: '2027-03-31',
         createdAt: '2026-07-03 09:15',
         detailAddress: '欢乐谷西区售票处旁',
         id: 'store-003',
         managerPhone: '13800007777',
         managerUsername: 'happy_valley_west',
+        payRate: '0.60%',
         status: '停用',
+        storeCode: 'ST0003',
         storeName: '欢乐谷西区店',
         storeType: '景区门店',
         tenantName: '星河票务集团',
         version: '专业版',
+      },
+      {
+        address: '上海市浦东新区星河集团总部',
+        authorizationExpireAt: '2028-07-04',
+        createdAt: '2026-07-04 11:20',
+        detailAddress: '星河总部 3 楼运营中心',
+        id: 'store-004',
+        managerPhone: '13900006666',
+        managerUsername: 'galaxy_hq_store',
+        payRate: '0.45%',
+        status: '启用',
+        storeCode: 'ST0004',
+        storeName: '星河总部旗舰店',
+        storeType: '集团门店',
+        tenantName: '星河票务集团',
+        version: '旗舰版',
+      },
+      {
+        address: '深圳市南山区欢乐谷美食街',
+        authorizationExpireAt: '2027-07-05',
+        createdAt: '2026-07-05 13:45',
+        detailAddress: '欢乐谷美食街 A12 档口',
+        id: 'store-005',
+        managerPhone: '13500005555',
+        managerUsername: 'happy_food_a12',
+        payRate: '0.72%',
+        status: '启用',
+        storeCode: 'ST0005',
+        storeName: '欢乐谷美食街店',
+        storeType: '餐饮门店',
+        tenantName: '星河票务集团',
+        version: '专业版',
+      },
+      {
+        address: '厦门市思明区海岸线度假酒店',
+        authorizationExpireAt: '2027-10-31',
+        createdAt: '2026-07-06 08:50',
+        detailAddress: '酒店前厅 PMS 服务台',
+        id: 'store-006',
+        managerPhone: '13400004444',
+        managerUsername: 'coast_hotel_pms',
+        payRate: '0.58%',
+        status: '启用',
+        storeCode: 'ST0006',
+        storeName: '海岸线度假酒店 PMS',
+        storeType: 'PMS',
+        tenantName: '海岸线文旅',
+        version: '专业版',
+      },
+      {
+        address: '青岛市崂山区海岸线礼品中心',
+        authorizationExpireAt: '2027-01-15',
+        createdAt: '2026-07-07 16:10',
+        detailAddress: '礼品中心 1 层收银区',
+        id: 'store-007',
+        managerPhone: '13300003333',
+        managerUsername: 'coast_gift_shop',
+        payRate: '0.70%',
+        status: '停用',
+        storeCode: 'ST0007',
+        storeName: '海岸线礼品中心',
+        storeType: '零售门店',
+        tenantName: '海岸线文旅',
+        version: '基础版',
+      },
+      {
+        address: '杭州市西湖区星河城市会客厅',
+        authorizationExpireAt: '2026-11-30',
+        createdAt: '2026-07-08 10:05',
+        detailAddress: '城市会客厅 B 区综合服务台',
+        id: 'store-008',
+        managerPhone: '13200002222',
+        managerUsername: 'galaxy_city_lounge',
+        payRate: '0.62%',
+        status: '过期',
+        storeCode: 'ST0008',
+        storeName: '星河城市会客厅',
+        storeType: '集团门店',
+        tenantName: '星河票务集团',
+        version: '基础版',
       },
     ],
     supportActions: [],
@@ -1029,7 +977,7 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理门店基础信息、管理员账号、版本和状态，覆盖新建、查看详情、切换版本、停用和启用等核心动作。',
+      '管理门店基础信息、管理员账号、版本和状态，覆盖新建、维护、停用和启用等核心动作。',
     documentNotes: [
       '门店类型创建成功后不可修改。',
       '版本切换后，能力边界会立即按新版本生效。',
@@ -1044,7 +992,7 @@ function createExplanations(): PageExplanations {
       { label: '所属租户', note: '门店归属的 SaaS 租户主体', required: true },
       {
         label: '门店类型',
-        note: '景区门店或游客中心，创建后不可修改',
+        note: '集团门店、景区门店、零售门店、餐饮门店或 PMS，创建后不可修改',
         required: true,
       },
       { label: '门店名称', note: '门店展示名称', required: true },
@@ -1056,8 +1004,8 @@ function createExplanations(): PageExplanations {
     permissionPoints: ['查看', '新建', '切换版本', '停用', '启用'],
     processSteps: [
       '通过门店名称、所属租户、门店类型和状态筛选目标门店。',
-      '从列表进入查看详情、切换版本、停用或启用动作。',
-      '在抽屉中完成表单填写或确认操作。',
+      '从列表进入维护动作。',
+      '在维护抽屉中查看基础信息、功能授权和支付信息，并完成版本切换、停用或启用。',
       '提交后即时刷新门店状态与版本信息。',
     ],
     statusTransitions: [
@@ -1105,18 +1053,75 @@ function createExplanations(): PageExplanations {
 
     <div class="flex flex-col gap-4">
       <div class="saas-filter-panel rounded-md bg-card p-3">
-        <FilterForm>
-          <template #reset-before>
-            <ElButton
-              v-for="action in interactions.actions"
-              :key="action.label"
-              :type="action.type || 'primary'"
-              @click="openAction(action)"
-            >
-              {{ action.label }}
-            </ElButton>
-          </template>
-        </FilterForm>
+        <ElForm
+          class="saas-filter-form"
+          :model="filterState"
+          label-position="left"
+          @submit.prevent="handleFilterSubmit"
+        >
+          <div class="saas-filter-grid">
+            <ElFormItem label="门店名称">
+              <ElInput
+                v-model="filterState.storeName"
+                clearable
+                placeholder="请输入门店名称、管理员用户名或手机号"
+              />
+            </ElFormItem>
+
+            <ElFormItem label="所属租户">
+              <ElInput
+                v-model="filterState.tenantName"
+                clearable
+                placeholder="请输入租户名称、用户名或手机号"
+              />
+            </ElFormItem>
+
+            <ElFormItem label="门店类型">
+              <ElSelect
+                v-model="filterState.storeType"
+                clearable
+                filterable
+                placeholder="请选择门店类型"
+              >
+                <ElOption
+                  v-for="option in storeTypeOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <ElFormItem label="门店状态">
+              <ElSelect
+                v-model="filterState.status"
+                clearable
+                filterable
+                placeholder="请选择门店状态"
+              >
+                <ElOption
+                  v-for="option in storeStatusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <div class="saas-filter-actions">
+              <ElButton
+                v-for="action in interactions.actions"
+                :key="action.label"
+                :type="action.type || 'primary'"
+                @click="openAction(action)"
+              >
+                {{ action.label }}
+              </ElButton>
+              <ElButton type="primary" native-type="submit">查询</ElButton>
+              <ElButton @click="handleFilterReset">重置</ElButton>
+            </div>
+          </div>
+        </ElForm>
       </div>
 
       <div class="saas-table-panel rounded-md bg-card p-3">
@@ -1125,7 +1130,7 @@ function createExplanations(): PageExplanations {
             v-for="column in interactions.columns"
             :key="column.key"
             :label="column.label"
-            min-width="140"
+            :min-width="column.minWidth ?? 140"
           >
             <template #default="{ row }">
               <ElTag
@@ -1147,10 +1152,10 @@ function createExplanations(): PageExplanations {
                   v-for="action in interactions.rowActions"
                   :key="action.label"
                   link
-                  :type="getToggleActionType(action, getStoreRow(row))"
+                  :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
-                  {{ getToggleActionLabel(action, getStoreRow(row)) }}
+                  {{ action.label }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1340,7 +1345,10 @@ function createExplanations(): PageExplanations {
         </div>
       </template>
 
-      <div v-if="isViewMode && selectedStore" class="flex flex-col gap-4">
+      <div
+        v-if="isMaintenanceMode && selectedStore"
+        class="flex flex-col gap-4"
+      >
         <div class="drawer-summary-card">
           <div class="text-sm font-medium text-[var(--el-text-color-primary)]">
             当前门店
@@ -1355,67 +1363,129 @@ function createExplanations(): PageExplanations {
           </div>
         </div>
 
-        <ElDescriptions :column="1" border>
-          <ElDescriptionsItem label="所属租户">
-            {{ selectedStore.tenantName }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="门店类型">
-            {{ selectedStore.storeType }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="管理员账号">
-            {{ selectedStore.managerUsername }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="管理员手机号">
-            {{ selectedStore.managerPhone }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="当前版本">
-            {{ selectedStore.version }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="创建时间">
-            {{ selectedStore.createdAt }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="门店地址">
-            {{ selectedStore.address }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="详细地址">
-            {{ selectedStore.detailAddress }}
-          </ElDescriptionsItem>
-        </ElDescriptions>
-      </div>
+        <ElTabs v-model="maintenanceActiveTab" class="maintenance-tabs">
+          <ElTabPane label="基础信息" name="basic">
+            <div class="flex flex-col gap-4">
+              <ElDescriptions :column="1" border>
+                <ElDescriptionsItem label="门店编号">
+                  {{ selectedStore.storeCode }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="所属租户">
+                  {{ selectedStore.tenantName }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="门店类型">
+                  {{ selectedStore.storeType }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="管理员账号">
+                  {{ selectedStore.managerUsername }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="管理员手机号">
+                  {{ selectedStore.managerPhone }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="当前版本">
+                  {{ selectedStore.version }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="创建时间">
+                  {{ selectedStore.createdAt }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="门店地址">
+                  {{ selectedStore.address }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="详细地址">
+                  {{ selectedStore.detailAddress }}
+                </ElDescriptionsItem>
+              </ElDescriptions>
 
-      <div
-        v-else-if="(isDisableMode || isEnableMode) && selectedStore"
-        class="flex flex-col gap-4"
-      >
-        <div class="drawer-warning-card">
-          <div class="text-sm font-medium text-[var(--el-color-danger)]">
-            {{
-              isDisableMode
-                ? '停用后门店将暂停使用业务能力'
-                : '启用后门店将继续使用业务能力'
-            }}
-          </div>
-          <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
-            请确认当前操作对象无误，再点击底部按钮完成处理。
-          </div>
-        </div>
+              <div class="drawer-section-card">
+                <div class="text-sm font-medium">切换版本</div>
+                <div class="mt-3 flex flex-wrap items-center gap-3">
+                  <ElSelect
+                    v-model="maintenanceVersion"
+                    class="maintenance-version-select"
+                    placeholder="请选择目标版本"
+                  >
+                    <ElOption label="基础版" value="基础版" />
+                    <ElOption label="专业版" value="专业版" />
+                    <ElOption label="旗舰版" value="旗舰版" />
+                  </ElSelect>
+                  <ElButton type="primary" @click="saveMaintenanceVersion">
+                    保存版本
+                  </ElButton>
+                </div>
+                <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
+                  版本切换后，功能授权会按新版本能力边界立即更新。
+                </div>
+              </div>
 
-        <ElDescriptions :column="1" border>
-          <ElDescriptionsItem label="门店名称">
-            {{ selectedStore.storeName }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="所属租户">
-            {{ selectedStore.tenantName }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="当前状态">
-            <ElTag :type="getStatusTagType(selectedStore.status)">
-              {{ selectedStore.status }}
-            </ElTag>
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="当前版本">
-            {{ selectedStore.version }}
-          </ElDescriptionsItem>
-        </ElDescriptions>
+              <div class="drawer-section-card">
+                <div class="text-sm font-medium">门店状态</div>
+                <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
+                  {{ getMaintenanceStatusTip(selectedStore.status) }}
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-3">
+                  <ElTag :type="getStatusTagType(selectedStore.status)">
+                    {{ selectedStore.status }}
+                  </ElTag>
+                  <ElButton
+                    :type="getMaintenanceStatusButtonType(selectedStore.status)"
+                    @click="toggleMaintenanceStatus"
+                  >
+                    {{ getMaintenanceStatusButtonText(selectedStore.status) }}
+                  </ElButton>
+                </div>
+              </div>
+            </div>
+          </ElTabPane>
+
+          <ElTabPane label="功能授权" name="authorization">
+            <div class="flex flex-col gap-4">
+              <ElDescriptions :column="1" border>
+                <ElDescriptionsItem label="授权版本">
+                  {{ selectedStore.version }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="授权到期">
+                  {{ selectedStore.authorizationExpireAt }}
+                </ElDescriptionsItem>
+                <ElDescriptionsItem label="授权状态">
+                  <ElTag :type="getStatusTagType(selectedStore.status)">
+                    {{ selectedStore.status }}
+                  </ElTag>
+                </ElDescriptionsItem>
+              </ElDescriptions>
+
+              <div class="drawer-section-card">
+                <div class="text-sm font-medium">已授权功能</div>
+                <ul
+                  class="mt-2 list-disc pl-5 text-sm leading-7 text-[var(--el-text-color-primary)]"
+                >
+                  <li v-for="feature in maintenanceFeatureItems" :key="feature">
+                    {{ feature }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </ElTabPane>
+
+          <ElTabPane label="支付信息" name="payment">
+            <ElDescriptions :column="1" border>
+              <ElDescriptionsItem label="支付费率">
+                {{ selectedStore.payRate }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="所属租户">
+                {{ selectedStore.tenantName }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="门店名称">
+                {{ selectedStore.storeName }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="门店编号">
+                {{ selectedStore.storeCode }}
+              </ElDescriptionsItem>
+              <ElDescriptionsItem label="管理员手机号">
+                {{ selectedStore.managerPhone }}
+              </ElDescriptionsItem>
+            </ElDescriptions>
+          </ElTabPane>
+        </ElTabs>
       </div>
 
       <div v-else-if="hasActionFields" class="flex flex-col gap-4">
@@ -1440,7 +1510,7 @@ function createExplanations(): PageExplanations {
             type="primary"
             @click="submitActiveAction"
           >
-            {{ submitButtonText }}
+            保存
           </ElButton>
         </div>
       </template>
@@ -1573,21 +1643,46 @@ function createExplanations(): PageExplanations {
   padding-bottom: 8px;
 }
 
-.saas-filter-panel :deep(.grid) {
-  row-gap: 4px;
+.saas-filter-form {
+  width: 100%;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3) {
-  row-gap: 12px;
-  padding-bottom: 0;
+.saas-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
+      180px,
+      1fr
+    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 12px 16px;
+  align-items: end;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3 .el-button) {
-  margin-left: 0;
+.saas-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  grid-column: 1 / -1;
+  padding-top: 2px;
 }
 
 .saas-filter-panel :deep(.el-form-item) {
   margin-bottom: 12px;
+}
+
+.saas-filter-panel :deep(.el-input),
+.saas-filter-panel :deep(.el-select) {
+  width: 100%;
+}
+
+.saas-filter-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .saas-filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .saas-table-panel {
@@ -1622,16 +1717,19 @@ function createExplanations(): PageExplanations {
   border-bottom-color: var(--el-border-color-lighter);
 }
 
-.drawer-summary-card,
-.drawer-warning-card {
+.drawer-section-card,
+.drawer-summary-card {
   border: 1px solid var(--el-border-color-light);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--el-fill-color-lighter);
   padding: 16px;
 }
 
-.drawer-warning-card {
-  border-color: var(--el-color-danger-light-5);
-  background: var(--el-color-danger-light-9);
+.maintenance-tabs :deep(.el-tabs__content) {
+  padding-top: 4px;
+}
+
+.maintenance-version-select {
+  width: 220px;
 }
 </style>

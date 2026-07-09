@@ -13,32 +13,18 @@ import {
   ElDialog,
   ElDrawer,
   ElEmpty,
+  ElForm,
+  ElFormItem,
   ElMessage,
+  ElOption,
   ElPagination,
+  ElSelect,
   ElSpace,
   ElTable,
   ElTag,
 } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
-
-interface SaaSFilterField {
-  defaultValue?: boolean | number | string | string[];
-  field?: string;
-  inputType?:
-    | 'date'
-    | 'daterange'
-    | 'password'
-    | 'select'
-    | 'switch'
-    | 'text'
-    | 'textarea';
-  label: string;
-  options?: readonly { label: string; value: boolean | number | string }[];
-  placeholder: string;
-  required?: boolean;
-  rows?: number;
-}
 
 interface SaaSColumnItem {
   key: string;
@@ -97,7 +83,6 @@ interface SaaSPageMeta {
   documentNotes?: readonly string[];
   exceptions?: readonly string[];
   fields?: readonly SaaSFieldItem[];
-  filters: readonly SaaSFilterField[];
   pageGoal: string;
   pendingItems?: readonly string[];
   permissionPoints?: readonly string[];
@@ -123,10 +108,6 @@ interface BaseActionFieldInput extends BaseFieldInput {
   note: string;
 }
 
-interface BaseFilterInput extends BaseFieldInput {
-  placeholder?: string;
-}
-
 function createSelectField(
   input: BaseActionFieldInput & {
     options: readonly FieldOption[];
@@ -135,18 +116,6 @@ function createSelectField(
   return {
     ...input,
     inputType: 'select',
-  };
-}
-
-function createSelectFilter(
-  input: BaseFilterInput & {
-    options: readonly FieldOption[];
-  },
-): SaaSFilterField {
-  return {
-    ...input,
-    inputType: 'select',
-    placeholder: input.placeholder ?? `请选择${input.label}`,
   };
 }
 
@@ -164,12 +133,7 @@ const roleNameOptions = [
 
 type PageInteractions = Pick<
   SaaSPageMeta,
-  | 'actions'
-  | 'columns'
-  | 'filters'
-  | 'rowActions'
-  | 'sampleData'
-  | 'supportActions'
+  'actions' | 'columns' | 'rowActions' | 'sampleData' | 'supportActions'
 >;
 type PageExplanations = Pick<
   SaaSPageMeta,
@@ -185,7 +149,7 @@ type PageExplanations = Pick<
 >;
 
 type InteractionItem = SaaSActionItem;
-type FormFieldItem = SaaSFieldItem | SaaSFilterField;
+type FormFieldItem = SaaSFieldItem;
 
 interface PermissionRecord {
   id: string;
@@ -266,30 +230,6 @@ const explanationStatusTransitionData = computed(() =>
 const activeInteractionFieldsData = computed(() =>
   (activeInteraction.value?.fields ?? []).map((item) => ({ ...item })),
 );
-
-const [FilterForm] = useVbenForm({
-  actionLayout: 'newLine',
-  actionPosition: 'right',
-  actionWrapperClass: 'pt-3 flex-wrap gap-3',
-  commonConfig: {
-    componentProps: {
-      class: 'w-full',
-    },
-  },
-  compact: true,
-  handleReset: handleFilterReset,
-  handleSubmit: handleFilterSubmit,
-  layout: 'vertical',
-  resetButtonOptions: {
-    content: '重置筛选',
-  },
-  schema: buildFilterSchema(interactions.filters),
-  showDefaultActions: true,
-  submitButtonOptions: {
-    content: '查询',
-  },
-  wrapperClass: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
-});
 
 const [DetailActionForm, detailActionFormApi] = useVbenForm({
   commonConfig: {
@@ -448,10 +388,6 @@ function buildDefaultValues(fields: readonly FormFieldItem[] = []) {
   );
 }
 
-function buildFilterSchema(fields: readonly SaaSFilterField[]) {
-  return fields.map((field, index) => buildFieldSchema(field, index));
-}
-
 function buildInteractionSchema(interaction?: InteractionItem) {
   return (interaction?.fields ?? []).map((field, index) =>
     buildFieldSchema(field, index, {
@@ -551,10 +487,10 @@ function handleRowAction(action: InteractionItem, row: Record<string, any>) {
   }
 }
 
-function handleFilterSubmit(values: Record<string, any>) {
+function handleFilterSubmit() {
   filterState.value = {
-    moduleScope: String(values.moduleScope ?? '').trim(),
-    roleName: String(values.roleName ?? '').trim(),
+    roleName: filterState.value.roleName.trim(),
+    moduleScope: filterState.value.moduleScope.trim(),
   };
   currentPage.value = 1;
 }
@@ -708,18 +644,6 @@ function createInteractions(): PageInteractions {
       { key: 'updatedBy', label: '最后修改人' },
       { key: 'updatedAt', label: '最后修改时间' },
     ],
-    filters: [
-      createSelectFilter({
-        field: 'roleName',
-        label: '角色名称',
-        options: roleNameOptions,
-      }),
-      createSelectFilter({
-        field: 'moduleScope',
-        label: '模块范围',
-        options: moduleScopeOptions,
-      }),
-    ],
     rowActions: [
       {
         label: '查看权限',
@@ -762,7 +686,7 @@ function createInteractions(): PageInteractions {
     sampleData: [
       {
         id: 'permission-001',
-        moduleScope: '客户管理 / 应用管理 / 公告管理',
+        moduleScope: '客户管理 / SaaS产品管理 / 公告管理',
         permissionCount: '28',
         permissionSet: '租户管理、门店管理、应用列表管理、顶部公告、新闻资讯',
         roleName: '平台运营经理',
@@ -835,18 +759,59 @@ function createExplanations(): PageExplanations {
 
     <div class="flex flex-col gap-4">
       <div class="saas-filter-panel rounded-md bg-card p-3">
-        <FilterForm>
-          <template #reset-before>
-            <ElButton
-              v-for="action in interactions.actions"
-              :key="action.label"
-              :type="action.type || 'primary'"
-              @click="openAction(action)"
-            >
-              {{ action.label }}
-            </ElButton>
-          </template>
-        </FilterForm>
+        <ElForm
+          class="saas-filter-form"
+          :model="filterState"
+          label-position="left"
+          @submit.prevent="handleFilterSubmit"
+        >
+          <div class="saas-filter-grid">
+            <ElFormItem label="角色名称">
+              <ElSelect
+                v-model="filterState.roleName"
+                clearable
+                filterable
+                placeholder="请选择角色名称"
+              >
+                <ElOption
+                  v-for="option in roleNameOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <ElFormItem label="模块范围">
+              <ElSelect
+                v-model="filterState.moduleScope"
+                clearable
+                filterable
+                placeholder="请选择模块范围"
+              >
+                <ElOption
+                  v-for="option in moduleScopeOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+
+            <div class="saas-filter-actions">
+              <ElButton
+                v-for="action in interactions.actions"
+                :key="action.label"
+                :type="action.type || 'primary'"
+                @click="openAction(action)"
+              >
+                {{ action.label }}
+              </ElButton>
+              <ElButton type="primary" native-type="submit">查询</ElButton>
+              <ElButton @click="handleFilterReset">重置</ElButton>
+            </div>
+          </div>
+        </ElForm>
       </div>
 
       <div class="saas-table-panel rounded-md bg-card p-3">
@@ -1266,21 +1231,46 @@ function createExplanations(): PageExplanations {
   padding-bottom: 8px;
 }
 
-.saas-filter-panel :deep(.grid) {
-  row-gap: 4px;
+.saas-filter-form {
+  width: 100%;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3) {
-  row-gap: 12px;
-  padding-bottom: 0;
+.saas-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
+      180px,
+      1fr
+    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 12px 16px;
+  align-items: end;
 }
 
-.saas-filter-panel :deep(.col-span-full.flex.items-center.gap-3 .el-button) {
-  margin-left: 0;
+.saas-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  grid-column: 1 / -1;
+  padding-top: 2px;
 }
 
 .saas-filter-panel :deep(.el-form-item) {
   margin-bottom: 12px;
+}
+
+.saas-filter-panel :deep(.el-input),
+.saas-filter-panel :deep(.el-select) {
+  width: 100%;
+}
+
+.saas-filter-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .saas-filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .saas-table-panel {
