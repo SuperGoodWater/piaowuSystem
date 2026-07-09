@@ -10,7 +10,7 @@ const routes: RouteRecordRaw[] = [
     },
     name: 'LegacyDashboardRedirect',
     path: '/dashboard',
-    redirect: '/home/analytics',
+    redirect: '/home/workspace',
   },
   {
     meta: {

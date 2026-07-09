@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { RouteRecordRaw } from 'vue-router';
+
 import type { VbenFormSchema } from '#/adapter/form';
 
 import { computed, ref, watch } from 'vue';
@@ -23,9 +25,11 @@ import {
   ElSpace,
   ElTable,
   ElTag,
+  ElTransfer,
 } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
+import { accessRoutes } from '#/router/routes';
 
 interface SaaSColumnItem {
   key: string;
@@ -179,6 +183,15 @@ interface VersionRecord {
   versionName: string;
 }
 
+interface PermissionOption {
+  key: string;
+  label: string;
+  level: number;
+  nodeType: '目录' | '页面';
+  routePath: string;
+  title: string;
+}
+
 const interactions = createInteractions();
 const explanations = createExplanations();
 
@@ -194,6 +207,9 @@ const filterState = ref({
   versionName: '',
 });
 const pageSize = ref(10);
+const permissionDialogVisible = ref(false);
+const permissionAssignments = ref<Record<string, string[]>>({});
+const selectedPermissionKeys = ref<string[]>([]);
 const selectedVersionId = ref('');
 const versionData = ref<VersionRecord[]>(
   interactions.sampleData.map((item) => normalizeVersionRecord(item)),
@@ -214,29 +230,19 @@ const selectedVersion = computed(
     null,
 );
 const isCreateMode = computed(() => activeAction.value === '新建版本');
-const isMaintainMode = computed(() => activeAction.value === '版本说明维护');
-const isViewMode = computed(() => activeAction.value === '查看版本');
-const isEditMode = computed(() => activeAction.value === '编辑版本');
-const isDisableMode = computed(() => activeAction.value === '停用');
+const isMaintainMode = computed(() => activeAction.value === '维护');
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
 const showResetButton = computed(
-  () => isCreateMode.value || isMaintainMode.value || isEditMode.value,
+  () => isCreateMode.value || isMaintainMode.value,
 );
 const showSubmitButton = computed(
-  () =>
-    isCreateMode.value ||
-    isMaintainMode.value ||
-    isEditMode.value ||
-    isDisableMode.value,
+  () => isCreateMode.value || isMaintainMode.value,
 );
 const submitButtonText = computed(() => {
-  if (isDisableMode.value) {
-    return '确认停用';
-  }
   if (isMaintainMode.value) {
-    return '确认维护';
+    return '保存维护';
   }
   return '保存';
 });
@@ -270,6 +276,12 @@ const explanationStatusTransitionData = computed(() =>
 );
 const activeInteractionFieldsData = computed(() =>
   (activeInteraction.value?.fields ?? []).map((item) => ({ ...item })),
+);
+const permissionOptions = computed<PermissionOption[]>(() =>
+  buildPermissionOptions(accessRoutes),
+);
+const selectedVersionPermissionCount = computed(
+  () => selectedPermissionKeys.value.length,
 );
 
 const [DetailActionForm, detailActionFormApi] = useVbenForm({
@@ -489,6 +501,59 @@ function getStatusTagType(status: VersionStatus) {
   return status === '启用' ? 'success' : 'info';
 }
 
+function getRouteTitle(route: RouteRecordRaw) {
+  return String(route.meta?.title ?? route.name ?? route.path);
+}
+
+function joinRoutePath(parentPath: string, path: string) {
+  if (path.startsWith('/')) {
+    return path;
+  }
+  if (!parentPath || parentPath === '/') {
+    return `/${path}`.replaceAll('//', '/');
+  }
+  return `${parentPath}/${path}`.replaceAll('//', '/');
+}
+
+function sortRoutes(routes: readonly RouteRecordRaw[]) {
+  return [...routes].sort((prev, next) => {
+    const prevOrder = Number(prev.meta?.order ?? 9999);
+    const nextOrder = Number(next.meta?.order ?? 9999);
+    return prevOrder - nextOrder;
+  });
+}
+
+function buildPermissionOptions(
+  routes: readonly RouteRecordRaw[],
+  parentTitles: string[] = [],
+  parentPath = '',
+  level = 0,
+): PermissionOption[] {
+  return sortRoutes(routes).flatMap((route) => {
+    if (route.meta?.hideInMenu) {
+      return [];
+    }
+
+    const title = getRouteTitle(route);
+    const routePath = joinRoutePath(parentPath, route.path);
+    const titleTree = [...parentTitles, title];
+    const children = route.children ?? [];
+    const option: PermissionOption = {
+      key: String(route.name ?? routePath),
+      label: titleTree.join(' / '),
+      level,
+      nodeType: children.length > 0 ? '目录' : '页面',
+      routePath,
+      title,
+    };
+
+    return [
+      option,
+      ...buildPermissionOptions(children, titleTree, routePath, level + 1),
+    ];
+  });
+}
+
 function updateVersionRecord(id: string, patch: Partial<VersionRecord>) {
   versionData.value = versionData.value.map((item) =>
     item.id === id
@@ -519,7 +584,7 @@ function handleRowAction(action: InteractionItem, row: Record<string, any>) {
   detailVisible.value = true;
   applyInteractionForm(action);
 
-  if (action.label === '编辑版本' || action.label === '版本说明维护') {
+  if (action.label === '维护') {
     populateInteractionForm({
       featureScope: currentRow.featureScope,
       status: currentRow.status,
@@ -549,7 +614,7 @@ function handleFilterReset() {
 }
 
 function resetActiveForm() {
-  if (isEditMode.value || isMaintainMode.value) {
+  if (isMaintainMode.value) {
     const currentVersion = selectedVersion.value;
     if (!currentVersion) {
       applyInteractionForm(activeInteraction.value);
@@ -647,26 +712,6 @@ async function updateVersion(values: Record<string, any>, successText: string) {
   closeDetailDrawer();
 }
 
-async function disableVersion() {
-  if (!selectedVersion.value) {
-    ElMessage.warning('未找到当前版本，请重新选择');
-    closeDetailDrawer();
-    return;
-  }
-
-  if (selectedVersion.value.status === '停用') {
-    ElMessage.warning('当前版本已停用，无需重复操作');
-    closeDetailDrawer();
-    return;
-  }
-
-  updateVersionRecord(selectedVersion.value.id, {
-    status: '停用',
-  });
-  ElMessage.success(`已停用版本：${selectedVersion.value.versionName}`);
-  closeDetailDrawer();
-}
-
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
     await createVersion(values);
@@ -674,22 +719,76 @@ async function handleDetailSubmit(values: Record<string, any>) {
   }
 
   if (isMaintainMode.value) {
-    await updateVersion(values, '版本说明维护完成');
+    await updateVersion(values, '版本信息已维护');
     return;
-  }
-
-  if (isEditMode.value) {
-    await updateVersion(values, '版本信息已更新');
   }
 }
 
 async function submitActiveAction() {
-  if (isDisableMode.value) {
-    await disableVersion();
+  await detailActionFormApi.validateAndSubmitForm();
+}
+
+function getToggleStatusAction(row: VersionRecord) {
+  return row.status === '启用'
+    ? {
+        label: '停用',
+        nextStatus: '停用' as VersionStatus,
+        type: 'danger' as const,
+      }
+    : {
+        label: '启用',
+        nextStatus: '启用' as VersionStatus,
+        type: 'success' as const,
+      };
+}
+
+function toggleVersionStatus(row: Record<string, any>) {
+  const currentRow = getVersionRow(row);
+  const action = getToggleStatusAction(currentRow);
+
+  updateVersionRecord(currentRow.id, {
+    status: action.nextStatus,
+  });
+  ElMessage.success(`已${action.label}版本：${currentRow.versionName}`);
+}
+
+function getDefaultPermissionKeys(row: VersionRecord) {
+  const options = permissionOptions.value;
+  const pageOptions = options.filter((item) => item.nodeType === '页面');
+
+  if (row.versionName.includes('旗舰')) {
+    return options.map((item) => item.key);
+  }
+
+  if (row.versionName.includes('专业')) {
+    return pageOptions.slice(0, 24).map((item) => item.key);
+  }
+
+  return pageOptions.slice(0, 12).map((item) => item.key);
+}
+
+function openPermissionDialog(row: Record<string, any>) {
+  const currentRow = getVersionRow(row);
+  selectedVersionId.value = currentRow.id;
+  selectedPermissionKeys.value =
+    permissionAssignments.value[currentRow.id] ??
+    getDefaultPermissionKeys(currentRow);
+  permissionDialogVisible.value = true;
+}
+
+function savePermissionAuthorization() {
+  if (!selectedVersion.value) {
+    ElMessage.warning('未找到当前版本，请重新选择');
+    permissionDialogVisible.value = false;
     return;
   }
 
-  await detailActionFormApi.validateAndSubmitForm();
+  permissionAssignments.value = {
+    ...permissionAssignments.value,
+    [selectedVersion.value.id]: [...selectedPermissionKeys.value],
+  };
+  ElMessage.success(`已保存功能授权：${selectedVersion.value.versionName}`);
+  permissionDialogVisible.value = false;
 }
 
 function handlePageSizeChange(size: number) {
@@ -760,48 +859,6 @@ function createInteractions(): PageInteractions {
           '确认状态后保存，版本进入列表。',
         ],
       },
-      {
-        label: '版本说明维护',
-        type: 'info',
-        description: '维护版本说明和功能边界说明，帮助门店切换时明确差异。',
-        fields: [
-          createSelectField({
-            field: 'storeType',
-            label: '适用门店类型',
-            note: '用于定位需要维护的版本',
-            options: storeTypeOptions,
-            required: true,
-          }),
-          createTextField({
-            field: 'versionName',
-            label: '版本名称',
-            note: '建议与线上版本名称保持一致',
-            required: true,
-          }),
-          createTextareaField({
-            field: 'versionDesc',
-            label: '版本说明',
-            note: '帮助业务快速理解版本定位',
-            rows: 3,
-          }),
-          createTextareaField({
-            field: 'featureScope',
-            label: '功能边界说明',
-            note: '明确版本包含的功能范围',
-            required: true,
-            rows: 4,
-          }),
-          createSelectField({
-            field: 'status',
-            label: '状态',
-            note: '同步维护版本启停状态',
-            options: tenantStatusOptions,
-            required: true,
-          }),
-        ],
-        goal: '保持版本文档和配置口径一致。',
-        permissionPoints: ['配置'],
-      },
     ],
     columns: [
       { key: 'versionName', label: '版本名称' },
@@ -812,15 +869,9 @@ function createInteractions(): PageInteractions {
     ],
     rowActions: [
       {
-        label: '查看版本',
-        description: '查看版本能力边界与适用门店类型。',
-        goal: '确认版本范围是否满足业务需求。',
-        permissionPoints: ['查看'],
-      },
-      {
-        label: '编辑版本',
+        label: '维护',
         type: 'warning',
-        description: '更新版本说明、状态或功能边界。',
+        description: '查看并维护版本适用门店类型、版本说明、状态和功能边界。',
         fields: [
           createSelectField({
             field: 'storeType',
@@ -856,18 +907,8 @@ function createInteractions(): PageInteractions {
             required: true,
           }),
         ],
-        goal: '持续维护版本能力定义。',
-        permissionPoints: ['配置'],
-      },
-      {
-        label: '停用',
-        type: 'danger',
-        description: '停用版本后该版本不可再被新增配置。',
-        documentNotes: [
-          '停用不会删除历史绑定记录，但新门店将不能继续选择该版本。',
-        ],
-        goal: '关闭不再维护的版本。',
-        permissionPoints: ['配置'],
+        goal: '查看并持续维护版本能力定义。',
+        permissionPoints: ['查看', '配置'],
       },
     ],
     sampleData: [
@@ -906,7 +947,7 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理不同门店类型下的版本能力配置，覆盖版本新建、查看、编辑、停用和说明维护等动作。',
+      '管理不同门店类型下的版本能力配置，覆盖版本新建、维护、停用和启用等动作。',
     documentNotes: [
       '同一门店类型下不允许创建同名版本。',
       '停用版本后，新的门店配置不可再选中该版本。',
@@ -914,7 +955,6 @@ function createExplanations(): PageExplanations {
     ],
     exceptions: [
       '适用门店类型、版本名称、功能边界说明缺失时不允许保存。',
-      '已停用版本不允许重复执行停用操作。',
       '同一门店类型下版本名称重复时不能提交。',
     ],
     fields: [
@@ -932,8 +972,9 @@ function createExplanations(): PageExplanations {
     permissionPoints: ['查看', '配置'],
     processSteps: [
       '通过版本名称、门店类型或状态筛选需要处理的版本。',
-      '从列表进入新建、编辑、停用或查看版本动作。',
-      '在抽屉内维护版本信息并提交。',
+      '从列表进入新建或维护版本动作。',
+      '在抽屉内查看并维护版本信息后提交。',
+      '点击停用或启用按钮后直接更新版本状态。',
       '保存后实时更新版本状态和更新时间。',
     ],
     statusTransitions: [
@@ -945,9 +986,9 @@ function createExplanations(): PageExplanations {
       },
       {
         current: '停用',
-        note: '当前页面暂未提供重新启用动作。',
-        target: '停用',
-        trigger: '查看版本',
+        note: '启用后新门店可以继续选择该版本。',
+        target: '启用',
+        trigger: '启用',
       },
     ],
   };
@@ -1060,14 +1101,24 @@ function createExplanations(): PageExplanations {
                   v-for="action in interactions.rowActions"
                   :key="action.label"
                   link
-                  :disabled="
-                    action.label === '停用' &&
-                    getVersionRow(row).status === '停用'
-                  "
                   :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
                   {{ action.label }}
+                </ElButton>
+                <ElButton
+                  link
+                  type="primary"
+                  @click="openPermissionDialog(row)"
+                >
+                  功能授权
+                </ElButton>
+                <ElButton
+                  link
+                  :type="getToggleStatusAction(getVersionRow(row)).type"
+                  @click="toggleVersionStatus(row)"
+                >
+                  {{ getToggleStatusAction(getVersionRow(row)).label }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1087,6 +1138,65 @@ function createExplanations(): PageExplanations {
         </div>
       </div>
     </div>
+
+    <ElDialog
+      v-model="permissionDialogVisible"
+      class="permission-dialog"
+      title="功能授权"
+      width="920px"
+    >
+      <div class="flex flex-col gap-4">
+        <ElDescriptions v-if="selectedVersion" :column="3" border>
+          <ElDescriptionsItem label="版本名称">
+            {{ selectedVersion.versionName }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="适用门店类型">
+            {{ selectedVersion.storeType }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="已选权限">
+            <ElTag type="success">
+              {{ selectedVersionPermissionCount }} 项
+            </ElTag>
+          </ElDescriptionsItem>
+        </ElDescriptions>
+
+        <div class="permission-transfer-wrap">
+          <ElTransfer
+            v-model="selectedPermissionKeys"
+            filterable
+            :button-texts="['移除', '授权']"
+            :data="permissionOptions"
+            :props="{ key: 'key', label: 'label' }"
+            target-order="original"
+            :titles="['系统页面权限', '已授权权限']"
+          >
+            <template #default="{ option }">
+              <div
+                class="permission-option"
+                :style="{ paddingLeft: `${option.level * 16}px` }"
+              >
+                <span class="permission-title">{{ option.title }}</span>
+                <ElTag
+                  size="small"
+                  :type="option.nodeType === '目录' ? 'info' : 'success'"
+                >
+                  {{ option.nodeType }}
+                </ElTag>
+              </div>
+            </template>
+          </ElTransfer>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <ElButton @click="permissionDialogVisible = false">取消</ElButton>
+          <ElButton type="primary" @click="savePermissionAuthorization">
+            保存授权
+          </ElButton>
+        </div>
+      </template>
+    </ElDialog>
 
     <ElDialog
       v-model="explanationVisible"
@@ -1268,32 +1378,7 @@ function createExplanations(): PageExplanations {
         </div>
       </template>
 
-      <div v-if="isViewMode && selectedVersion" class="flex flex-col gap-4">
-        <ElDescriptions :column="1" border>
-          <ElDescriptionsItem label="版本名称">
-            {{ selectedVersion.versionName }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="适用门店类型">
-            {{ selectedVersion.storeType }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="状态">
-            <ElTag :type="getStatusTagType(selectedVersion.status)">
-              {{ selectedVersion.status }}
-            </ElTag>
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="版本说明">
-            {{ selectedVersion.versionDesc || '-' }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="功能边界说明">
-            {{ selectedVersion.featureScope }}
-          </ElDescriptionsItem>
-          <ElDescriptionsItem label="更新时间">
-            {{ selectedVersion.updatedAt }}
-          </ElDescriptionsItem>
-        </ElDescriptions>
-      </div>
-
-      <div v-else-if="hasActionFields" class="flex flex-col gap-4">
+      <div v-if="hasActionFields" class="flex flex-col gap-4">
         <DetailActionForm />
       </div>
 
@@ -1485,10 +1570,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }
@@ -1551,5 +1635,43 @@ function createExplanations(): PageExplanations {
 .saas-data-table :deep(th.el-table__cell),
 .saas-data-table :deep(td.el-table__cell) {
   border-bottom-color: var(--el-border-color-lighter);
+}
+
+.permission-transfer-wrap {
+  overflow-x: auto;
+}
+
+.permission-transfer-wrap :deep(.el-transfer) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.permission-transfer-wrap :deep(.el-transfer-panel) {
+  width: 360px;
+}
+
+.permission-transfer-wrap :deep(.el-transfer-panel__body) {
+  height: 430px;
+}
+
+.permission-transfer-wrap :deep(.el-transfer-panel__list.is-filterable) {
+  height: 356px;
+}
+
+.permission-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.permission-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

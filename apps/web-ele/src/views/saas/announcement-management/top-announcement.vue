@@ -208,7 +208,9 @@ const selectedAnnouncement = computed(
 );
 const isCreateMode = computed(() => activeAction.value === '新建公告');
 const isEditMode = computed(() => activeAction.value === '编辑');
-const isToggleMode = computed(() => activeAction.value === '启停');
+const isEnableMode = computed(() => activeAction.value === '启用');
+const isDisableMode = computed(() => activeAction.value === '停用');
+const isToggleMode = computed(() => isEnableMode.value || isDisableMode.value);
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
@@ -217,9 +219,8 @@ const showSubmitButton = computed(
   () => isCreateMode.value || isEditMode.value || isToggleMode.value,
 );
 const submitButtonText = computed(() => {
-  if (isToggleMode.value) {
-    return '确认切换';
-  }
+  if (isEnableMode.value) return '确认启用';
+  if (isDisableMode.value) return '确认停用';
   return '保存';
 });
 const filteredAnnouncements = computed(() => {
@@ -471,6 +472,18 @@ function getStatusTagType(status: AnnouncementStatus) {
   return status === '启用' ? 'success' : 'info';
 }
 
+function getVisibleRowActions(row: AnnouncementRecord) {
+  return interactions.rowActions.filter((action) => {
+    if (action.label === '启用') {
+      return row.status === '停用';
+    }
+    if (action.label === '停用') {
+      return row.status === '启用';
+    }
+    return true;
+  });
+}
+
 function updateAnnouncementRecord(
   id: string,
   patch: Partial<AnnouncementRecord>,
@@ -627,8 +640,13 @@ async function toggleAnnouncement() {
     return;
   }
 
-  const nextStatus: AnnouncementStatus =
-    selectedAnnouncement.value.status === '启用' ? '停用' : '启用';
+  const nextStatus: AnnouncementStatus = isEnableMode.value ? '启用' : '停用';
+
+  if (selectedAnnouncement.value.status === nextStatus) {
+    ElMessage.info(`当前公告已${nextStatus}`);
+    closeDetailDrawer();
+    return;
+  }
 
   updateAnnouncementRecord(selectedAnnouncement.value.id, {
     status: nextStatus,
@@ -764,11 +782,18 @@ function createInteractions(): PageInteractions {
         permissionPoints: ['编辑'],
       },
       {
-        label: '启停',
+        label: '启用',
+        type: 'success',
+        description: '将已停用公告恢复展示。',
+        goal: '启用顶部公告。',
+        permissionPoints: ['发布'],
+      },
+      {
+        label: '停用',
         type: 'warning',
-        description: '控制公告是否在顶部展示。',
-        goal: '启用或下线顶部公告。',
-        permissionPoints: ['发布', '下线'],
+        description: '停用当前公告，不再在顶部展示。',
+        goal: '停用顶部公告。',
+        permissionPoints: ['下线'],
       },
     ],
     sampleData: [
@@ -796,7 +821,7 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理顶部公告发布、编辑和启停，确保面向平台用户的重要提示能及时展示。',
+      '管理顶部公告发布、编辑、启用和停用，确保面向平台用户的重要提示能及时展示。',
     documentNotes: [
       '顶部公告需明确通知对象，避免错误触达。',
       '同一对象下不建议同时存在多条同名启用公告。',
@@ -805,7 +830,7 @@ function createExplanations(): PageExplanations {
     exceptions: [
       '公告标题、通知对象或状态为空时不允许保存。',
       '相同对象下存在同名启用公告时不能重复创建。',
-      '启停动作需要基于当前选中的公告执行。',
+      '启用或停用动作需要基于当前选中的公告执行。',
     ],
     fields: [
       { label: '公告标题', note: '顶部展示的公告标题', required: true },
@@ -817,7 +842,7 @@ function createExplanations(): PageExplanations {
     permissionPoints: ['新建', '编辑', '发布', '下线'],
     processSteps: [
       '通过公告标题、通知对象或状态筛选公告。',
-      '从列表进入新建、编辑或启停动作。',
+      '从列表进入新建、编辑、启用或停用动作。',
       '在抽屉中完成公告信息填写或状态切换确认。',
       '提交后即时刷新公告状态和发布时间。',
     ],
@@ -826,13 +851,13 @@ function createExplanations(): PageExplanations {
         current: '启用',
         note: '停用后公告不再展示在顶部。',
         target: '停用',
-        trigger: '启停',
+        trigger: '停用',
       },
       {
         current: '停用',
         note: '重新启用后恢复顶部展示。',
         target: '启用',
-        trigger: '启停',
+        trigger: '启用',
       },
     ],
   };
@@ -942,7 +967,9 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
-                  v-for="action in interactions.rowActions"
+                  v-for="action in getVisibleRowActions(
+                    getAnnouncementRow(row),
+                  )"
                   :key="action.label"
                   link
                   :type="action.type || 'primary'"
@@ -1350,10 +1377,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }

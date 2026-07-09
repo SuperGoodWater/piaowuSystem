@@ -90,7 +90,7 @@ const quickNavItems: WorkbenchQuickNavItem[] = [
   {
     color: '#1fdaca',
     icon: 'ion:home-outline',
-    title: '首页',
+    title: '工作台',
     url: '/',
   },
   {

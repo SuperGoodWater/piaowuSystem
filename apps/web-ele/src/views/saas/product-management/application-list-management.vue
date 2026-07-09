@@ -141,6 +141,7 @@ function createTextField(input: BaseActionFieldInput): SaaSFieldItem {
 const appShelfStatusOptions = [
   { label: '已上架', value: '已上架' },
   { label: '已下架', value: '已下架' },
+  { label: '已停用', value: '已停用' },
 ] as const;
 
 const appTypeOptions = [
@@ -168,12 +169,19 @@ type PageExplanations = Pick<
 
 type InteractionItem = SaaSActionItem;
 type FormFieldItem = SaaSFieldItem;
-type AppShelfStatus = '已上架' | '已下架';
+type AppShelfStatus = '已上架' | '已下架' | '已停用';
 
 interface AppRecord {
+  appIcon: string;
+  appId: string;
+  appIntro: string;
   appName: string;
   appType: string;
+  appUrl: string;
   id: string;
+  landingPageUrl: string;
+  permissionApiFields: string;
+  price: string;
   status: AppShelfStatus;
   updatedAt: string;
   visibility: string;
@@ -199,7 +207,7 @@ const appData = ref<AppRecord[]>(
   interactions.sampleData.map((item) => normalizeAppRecord(item)),
 );
 
-const pageTitle = computed(() => String(route.meta.title ?? '应用列表管理'));
+const pageTitle = computed(() => String(route.meta.title ?? '应用管理'));
 const pagePriority = computed(() => String(route.meta.priority ?? 'P1'));
 const actionCatalog = computed<InteractionItem[]>(() => [
   ...interactions.actions,
@@ -213,24 +221,38 @@ const selectedApp = computed(
 );
 const isCreateMode = computed(() => activeAction.value === '新增应用');
 const isEditMode = computed(() => activeAction.value === '编辑');
-const isVisibilityMode = computed(() => activeAction.value === '设置可见性');
+const isOnlineMode = computed(() => activeAction.value === '上架');
 const isOfflineMode = computed(() => activeAction.value === '下架');
+const isEnableMode = computed(() => activeAction.value === '启用');
+const isDisabledMode = computed(() => activeAction.value === '停用');
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
-const showResetButton = computed(
-  () => isCreateMode.value || isEditMode.value || isVisibilityMode.value,
-);
+const showResetButton = computed(() => isCreateMode.value || isEditMode.value);
 const showSubmitButton = computed(
   () =>
     isCreateMode.value ||
     isEditMode.value ||
-    isVisibilityMode.value ||
-    isOfflineMode.value,
+    isOnlineMode.value ||
+    isOfflineMode.value ||
+    isEnableMode.value ||
+    isDisabledMode.value,
 );
-const submitButtonText = computed(() =>
-  isOfflineMode.value ? '确认下架' : '保存',
-);
+const submitButtonText = computed(() => {
+  if (isOnlineMode.value) {
+    return '确认上架';
+  }
+  if (isOfflineMode.value) {
+    return '确认下架';
+  }
+  if (isEnableMode.value) {
+    return '确认启用';
+  }
+  if (isDisabledMode.value) {
+    return '确认停用';
+  }
+  return '保存';
+});
 const filteredApps = computed(() => {
   const appName = filterState.value.appName.trim().toLowerCase();
   const appType = filterState.value.appType;
@@ -238,7 +260,9 @@ const filteredApps = computed(() => {
 
   return appData.value.filter((item) => {
     const matchesName =
-      !appName || item.appName.toLowerCase().includes(appName);
+      !appName ||
+      item.appName.toLowerCase().includes(appName) ||
+      item.appId.toLowerCase().includes(appName);
     const matchesType = !appType || item.appType === appType;
     const matchesStatus = !status || item.status === status;
     return matchesName && matchesType && matchesStatus;
@@ -268,7 +292,7 @@ const [DetailActionForm, detailActionFormApi] = useVbenForm({
   layout: 'vertical',
   schema: [],
   showDefaultActions: false,
-  wrapperClass: 'grid-cols-1 md:grid-cols-2',
+  wrapperClass: 'grid-cols-1',
 });
 
 function getInteractionGoal(interaction?: InteractionItem) {
@@ -393,9 +417,16 @@ function getCurrentDateTime() {
 
 function normalizeAppRecord(record: Record<string, string>): AppRecord {
   return {
+    appIcon: record.appIcon ?? '',
+    appId: record.appId ?? '',
+    appIntro: record.appIntro ?? '',
     appName: record.appName ?? '',
     appType: record.appType ?? '',
+    appUrl: record.appUrl ?? '',
     id: record.id ?? `app-${Math.random().toString(36).slice(2, 10)}`,
+    landingPageUrl: record.landingPageUrl ?? '',
+    permissionApiFields: record.permissionApiFields ?? '',
+    price: record.price ?? '',
     status: (record.status as AppShelfStatus) ?? '已下架',
     updatedAt: record.updatedAt ?? getCurrentDateTime(),
     visibility: record.visibility ?? '',
@@ -411,7 +442,51 @@ function getCellValue(row: AppRecord, key: string) {
 }
 
 function getStatusTagType(status: AppShelfStatus) {
-  return status === '已上架' ? 'success' : 'info';
+  if (status === '已上架') {
+    return 'success';
+  }
+  if (status === '已停用') {
+    return 'danger';
+  }
+  return 'info';
+}
+
+function getAppIconText(appIcon: string, appName: string) {
+  return appIcon.trim() || appName.trim().slice(0, 2) || '应用';
+}
+
+function getStateActionTip() {
+  if (isOnlineMode.value) {
+    return '上架后，符合可见范围的企业可以重新开通该应用。';
+  }
+  if (isOfflineMode.value) {
+    return '下架后仅关闭新企业的开通入口，不影响已开通企业继续使用。';
+  }
+  if (isEnableMode.value) {
+    return '启用后，应用恢复为已上架状态，企业可以重新查看、开通和使用。';
+  }
+  if (isDisabledMode.value) {
+    return '停用后，全部企业都将不再能够查看该应用，无法开通、无法使用。';
+  }
+  return '';
+}
+
+function getVisibleRowActions(row: AppRecord) {
+  return interactions.rowActions.filter((action) => {
+    if (action.label === '上架') {
+      return row.status === '已下架';
+    }
+    if (action.label === '下架') {
+      return row.status === '已上架';
+    }
+    if (action.label === '启用') {
+      return row.status === '已停用';
+    }
+    if (action.label === '停用') {
+      return row.status !== '已停用';
+    }
+    return true;
+  });
 }
 
 function updateAppRecord(id: string, patch: Partial<AppRecord>) {
@@ -443,13 +518,8 @@ function handleRowAction(action: InteractionItem, row: Record<string, any>) {
   selectedAppId.value = currentRow.id;
   applyInteractionForm(action);
 
-  if (action.label === '编辑' || action.label === '设置可见性') {
-    populateInteractionForm({
-      appName: currentRow.appName,
-      appType: currentRow.appType,
-      status: currentRow.status,
-      visibility: currentRow.visibility,
-    });
+  if (action.label === '编辑') {
+    populateInteractionForm(buildAppFormValues(currentRow));
   }
 
   detailVisible.value = true;
@@ -473,14 +543,25 @@ function handleFilterReset() {
   currentPage.value = 1;
 }
 
+function buildAppFormValues(app: AppRecord) {
+  return {
+    appIcon: app.appIcon,
+    appId: app.appId,
+    appIntro: app.appIntro,
+    appName: app.appName,
+    appType: app.appType,
+    appUrl: app.appUrl,
+    landingPageUrl: app.landingPageUrl,
+    permissionApiFields: app.permissionApiFields,
+    price: app.price,
+    status: app.status,
+    visibility: app.visibility,
+  };
+}
+
 function resetActiveForm() {
-  if ((isEditMode.value || isVisibilityMode.value) && selectedApp.value) {
-    populateInteractionForm({
-      appName: selectedApp.value.appName,
-      appType: selectedApp.value.appType,
-      status: selectedApp.value.status,
-      visibility: selectedApp.value.visibility,
-    });
+  if (isEditMode.value && selectedApp.value) {
+    populateInteractionForm(buildAppFormValues(selectedApp.value));
     return;
   }
 
@@ -488,26 +569,53 @@ function resetActiveForm() {
 }
 
 async function createApp(values: Record<string, any>) {
+  const appIcon = String(values.appIcon ?? '').trim();
+  const appId = String(values.appId ?? '').trim();
+  const appIntro = String(values.appIntro ?? '').trim();
   const appName = String(values.appName ?? '').trim();
   const appType = String(values.appType ?? '').trim();
+  const appUrl = String(values.appUrl ?? '').trim();
+  const landingPageUrl = String(values.landingPageUrl ?? '').trim();
+  const permissionApiFields = String(values.permissionApiFields ?? '').trim();
+  const price = String(values.price ?? '').trim();
   const visibility = String(values.visibility ?? '').trim();
   const status = String(values.status ?? '已下架').trim() as AppShelfStatus;
 
-  if (!appName || !appType || !visibility) {
+  if (
+    !appName ||
+    !appId ||
+    !appType ||
+    !appIcon ||
+    !appIntro ||
+    !price ||
+    !landingPageUrl ||
+    !appUrl ||
+    !permissionApiFields ||
+    !visibility
+  ) {
     ElMessage.warning('请先完善应用信息');
     return;
   }
 
-  const duplicated = appData.value.some((item) => item.appName === appName);
+  const duplicated = appData.value.some(
+    (item) => item.appName === appName || item.appId === appId,
+  );
   if (duplicated) {
-    ElMessage.warning('已存在同名应用，请调整后再提交');
+    ElMessage.warning('已存在同名或同 ID 应用，请调整后再提交');
     return;
   }
 
   appData.value = [
     normalizeAppRecord({
+      appIcon,
+      appId,
+      appIntro,
       appName,
       appType,
+      appUrl,
+      landingPageUrl,
+      permissionApiFields,
+      price,
       status,
       updatedAt: getCurrentDateTime(),
       visibility,
@@ -526,19 +634,54 @@ async function editApp(values: Record<string, any>) {
     return;
   }
 
+  const appIcon = String(values.appIcon ?? '').trim();
+  const appId = String(values.appId ?? '').trim();
+  const appIntro = String(values.appIntro ?? '').trim();
   const appName = String(values.appName ?? '').trim();
   const appType = String(values.appType ?? '').trim();
+  const appUrl = String(values.appUrl ?? '').trim();
+  const landingPageUrl = String(values.landingPageUrl ?? '').trim();
+  const permissionApiFields = String(values.permissionApiFields ?? '').trim();
+  const price = String(values.price ?? '').trim();
   const visibility = String(values.visibility ?? '').trim();
   const status = String(values.status ?? '已下架').trim() as AppShelfStatus;
 
-  if (!appName || !appType || !visibility) {
+  if (
+    !appName ||
+    !appId ||
+    !appType ||
+    !appIcon ||
+    !appIntro ||
+    !price ||
+    !landingPageUrl ||
+    !appUrl ||
+    !permissionApiFields ||
+    !visibility
+  ) {
     ElMessage.warning('请先完善应用信息');
     return;
   }
 
+  const duplicated = appData.value.some(
+    (item) =>
+      item.id !== selectedApp.value?.id &&
+      (item.appName === appName || item.appId === appId),
+  );
+  if (duplicated) {
+    ElMessage.warning('已存在同名或同 ID 应用，请调整后再提交');
+    return;
+  }
+
   updateAppRecord(selectedApp.value.id, {
+    appIcon,
+    appId,
+    appIntro,
     appName,
     appType,
+    appUrl,
+    landingPageUrl,
+    permissionApiFields,
+    price,
     status,
     visibility,
   });
@@ -546,22 +689,27 @@ async function editApp(values: Record<string, any>) {
   closeDetailDrawer();
 }
 
-async function updateVisibility(values: Record<string, any>) {
+async function onlineApp() {
   if (!selectedApp.value) {
     ElMessage.warning('未找到当前应用，请重新选择');
     closeDetailDrawer();
     return;
   }
 
-  const visibility = String(values.visibility ?? '').trim();
-
-  if (!visibility) {
-    ElMessage.warning('请先填写可见范围');
+  if (selectedApp.value.status === '已上架') {
+    ElMessage.info('当前应用已上架');
+    closeDetailDrawer();
     return;
   }
 
-  updateAppRecord(selectedApp.value.id, { visibility });
-  ElMessage.success(`已更新应用可见性：${selectedApp.value.appName}`);
+  if (selectedApp.value.status === '已停用') {
+    ElMessage.warning('已停用应用请先执行启用');
+    closeDetailDrawer();
+    return;
+  }
+
+  updateAppRecord(selectedApp.value.id, { status: '已上架' });
+  ElMessage.success(`已上架应用：${selectedApp.value.appName}`);
   closeDetailDrawer();
 }
 
@@ -578,8 +726,50 @@ async function offlineApp() {
     return;
   }
 
+  if (selectedApp.value.status === '已停用') {
+    ElMessage.warning('已停用应用请先执行启用');
+    closeDetailDrawer();
+    return;
+  }
+
   updateAppRecord(selectedApp.value.id, { status: '已下架' });
   ElMessage.success(`已下架应用：${selectedApp.value.appName}`);
+  closeDetailDrawer();
+}
+
+async function enableApp() {
+  if (!selectedApp.value) {
+    ElMessage.warning('未找到当前应用，请重新选择');
+    closeDetailDrawer();
+    return;
+  }
+
+  if (selectedApp.value.status !== '已停用') {
+    ElMessage.info('当前应用无需启用');
+    closeDetailDrawer();
+    return;
+  }
+
+  updateAppRecord(selectedApp.value.id, { status: '已上架' });
+  ElMessage.success(`已启用应用：${selectedApp.value.appName}`);
+  closeDetailDrawer();
+}
+
+async function disableApp() {
+  if (!selectedApp.value) {
+    ElMessage.warning('未找到当前应用，请重新选择');
+    closeDetailDrawer();
+    return;
+  }
+
+  if (selectedApp.value.status === '已停用') {
+    ElMessage.info('当前应用已停用');
+    closeDetailDrawer();
+    return;
+  }
+
+  updateAppRecord(selectedApp.value.id, { status: '已停用' });
+  ElMessage.success(`已停用应用：${selectedApp.value.appName}`);
   closeDetailDrawer();
 }
 
@@ -593,15 +783,26 @@ async function handleDetailSubmit(values: Record<string, any>) {
     await editApp(values);
     return;
   }
-
-  if (isVisibilityMode.value) {
-    await updateVisibility(values);
-  }
 }
 
 async function submitActiveAction() {
+  if (isOnlineMode.value) {
+    await onlineApp();
+    return;
+  }
+
   if (isOfflineMode.value) {
     await offlineApp();
+    return;
+  }
+
+  if (isEnableMode.value) {
+    await enableApp();
+    return;
+  }
+
+  if (isDisabledMode.value) {
+    await disableApp();
     return;
   }
 
@@ -626,104 +827,118 @@ watch(detailVisible, (visible) => {
   }
 });
 
+function createAppFormFields(statusNote: string): SaaSFieldItem[] {
+  return [
+    createTextField({
+      field: 'appId',
+      label: '应用ID',
+      note: '应用唯一业务标识，建议使用稳定编码',
+      required: true,
+    }),
+    createTextField({
+      field: 'appName',
+      label: '应用名称',
+      note: '应用展示名称',
+      required: true,
+    }),
+    createTextField({
+      field: 'appIcon',
+      label: '应用图标',
+      note: '用于原型展示的图标文案或图标地址',
+      required: true,
+    }),
+    createSelectField({
+      field: 'appType',
+      label: '应用类型',
+      note: '营销应用 / 运营应用 / 数据应用',
+      options: appTypeOptions,
+      required: true,
+    }),
+    createTextareaField({
+      field: 'appIntro',
+      label: '应用介绍',
+      note: '应用能力、适用场景和核心价值',
+      required: true,
+      rows: 4,
+    }),
+    createTextField({
+      field: 'price',
+      label: '应用价格',
+      note: '如 199 元/月、按门店计费或联系商务',
+      required: true,
+    }),
+    createTextField({
+      field: 'landingPageUrl',
+      label: '落地页地址',
+      note: '应用介绍页、营销页或帮助页地址',
+      required: true,
+    }),
+    createTextField({
+      field: 'appUrl',
+      label: '应用地址',
+      note: '应用入口地址',
+      required: true,
+    }),
+    createTextareaField({
+      field: 'permissionApiFields',
+      label: '应用权限接口字段维护',
+      note: '维护权限字段、接口标识或权限码映射',
+      required: true,
+      rows: 5,
+    }),
+    createTextareaField({
+      field: 'visibility',
+      label: '可见范围',
+      note: '如旗舰版可见、景区门店可见',
+      required: true,
+      rows: 3,
+    }),
+    createSelectField({
+      field: 'status',
+      label: '应用状态',
+      note: statusNote,
+      options: appShelfStatusOptions,
+      required: true,
+    }),
+  ];
+}
+
 function createInteractions(): PageInteractions {
   return {
     actions: [
       {
         label: '新增应用',
         type: 'primary',
-        description: '登记新的 SaaS 应用，并配置其类型和可见范围。',
-        fields: [
-          createTextField({
-            field: 'appName',
-            label: '应用名称',
-            note: '应用展示名称',
-            required: true,
-          }),
-          createSelectField({
-            field: 'appType',
-            label: '应用类型',
-            note: '营销应用 / 运营应用 / 数据应用',
-            options: appTypeOptions,
-            required: true,
-          }),
-          createTextareaField({
-            field: 'visibility',
-            label: '可见范围',
-            note: '如旗舰版可见、景区门店可见',
-            required: true,
-            rows: 3,
-          }),
-          createSelectField({
-            field: 'status',
-            label: '上架状态',
-            note: '已上架 / 已下架',
-            options: appShelfStatusOptions,
-            required: true,
-          }),
-        ],
+        description: '登记新的 SaaS 应用，并配置资料、价格、入口和权限字段。',
+        fields: createAppFormFields('已上架 / 已下架 / 已停用'),
         goal: '建立新的应用档案。',
         permissionPoints: ['新增应用'],
       },
     ],
     columns: [
+      { key: 'appId', label: '应用ID' },
+      { key: 'appIcon', label: '应用图标' },
       { key: 'appName', label: '应用名称' },
       { key: 'appType', label: '应用类型' },
+      { key: 'price', label: '应用价格' },
       { key: 'visibility', label: '可见范围' },
-      { key: 'status', label: '上架状态' },
+      { key: 'status', label: '应用状态' },
       { key: 'updatedAt', label: '更新时间' },
     ],
     rowActions: [
       {
         label: '编辑',
-        description: '修改应用名称、类型和上架状态。',
-        fields: [
-          createTextField({
-            field: 'appName',
-            label: '应用名称',
-            note: '应用展示名称',
-            required: true,
-          }),
-          createSelectField({
-            field: 'appType',
-            label: '应用类型',
-            note: '营销应用 / 运营应用 / 数据应用',
-            options: appTypeOptions,
-            required: true,
-          }),
-          createTextareaField({
-            field: 'visibility',
-            label: '可见范围',
-            note: '按版本或门店类型配置可见性',
-            required: true,
-            rows: 3,
-          }),
-          createSelectField({
-            field: 'status',
-            label: '上架状态',
-            note: '应用当前上架状态',
-            options: appShelfStatusOptions,
-            required: true,
-          }),
-        ],
+        description: '修改应用资料、价格、入口地址、权限字段和状态。',
+        fields: createAppFormFields('应用当前状态'),
         goal: '维护应用基础信息。',
         permissionPoints: ['编辑应用'],
       },
       {
-        label: '设置可见性',
-        type: 'warning',
-        description: '调整应用对不同版本或门店类型的可见范围。',
-        fields: [
-          createTextareaField({
-            field: 'visibility',
-            label: '可见范围',
-            note: '支持按版本、门店类型、组织范围描述',
-            required: true,
-            rows: 4,
-          }),
-        ],
-        goal: '控制应用开通范围。',
-        permissionPoints: ['设置可见性'],
+        label: '上架',
+        type: 'success',
+        description: '将已下架应用重新上架，恢复新企业开通入口。',
+        goal: '恢复已下架应用的新开通能力。',
+        permissionPoints: ['上架应用'],
       },
       {
         label: '下架',
@@ -732,31 +947,89 @@ function createInteractions(): PageInteractions {
         goal: '停止新门店继续开通该应用。',
         permissionPoints: ['下架应用'],
       },
+      {
+        label: '启用',
+        type: 'success',
+        description:
+          '将已停用应用恢复为已上架状态，重新允许企业查看、开通和使用。',
+        goal: '恢复已停用应用的展示、开通和使用能力。',
+        permissionPoints: ['启用应用'],
+      },
+      {
+        label: '停用',
+        type: 'danger',
+        description:
+          '停用后，全部企业都将不再能够查看该应用，无法开通、无法使用。',
+        goal: '立即关闭该应用对所有企业的展示和使用能力。',
+        permissionPoints: ['停用应用'],
+      },
     ],
     sampleData: [
       {
+        appIcon: '会员',
+        appId: 'APP-MEMBER-001',
+        appIntro:
+          '面向景区、零售和餐饮门店的会员分层、储值、优惠券和活动运营工具。',
         appName: '会员营销中心',
         appType: '营销应用',
+        appUrl: 'https://saas.example.com/apps/member-marketing',
         id: 'app-001',
+        landingPageUrl: 'https://saas.example.com/landing/member-marketing',
+        permissionApiFields:
+          'member.coupon.create\nmember.level.update\nmember.campaign.publish',
+        price: '199 元/月',
         status: '已上架',
         updatedAt: '2026-07-02 12:15',
         visibility: '旗舰版可见',
       },
       {
+        appIcon: '巡检',
+        appId: 'APP-INSPECTION-002',
+        appIntro: '支持门店巡检任务、问题拍照、整改跟进和巡检结果汇总。',
         appName: '门店巡检台',
         appType: '运营应用',
+        appUrl: 'https://saas.example.com/apps/store-inspection',
         id: 'app-002',
+        landingPageUrl: 'https://saas.example.com/landing/store-inspection',
+        permissionApiFields:
+          'inspection.task.create\ninspection.issue.update\ninspection.report.view',
+        price: '99 元/月',
         status: '已下架',
         updatedAt: '2026-07-05 16:40',
         visibility: '全部门店可见',
       },
       {
+        appIcon: '分析',
+        appId: 'APP-ANALYTICS-003',
+        appIntro:
+          '沉淀经营数据、票务数据和支付数据，提供趋势、来源和门店对比分析。',
         appName: '经营分析看板',
         appType: '数据应用',
+        appUrl: 'https://saas.example.com/apps/business-analytics',
         id: 'app-003',
+        landingPageUrl: 'https://saas.example.com/landing/business-analytics',
+        permissionApiFields:
+          'analytics.dashboard.view\nanalytics.report.export\nanalytics.metric.config',
+        price: '299 元/月',
         status: '已上架',
         updatedAt: '2026-07-06 18:10',
         visibility: '专业版 / 旗舰版可见',
+      },
+      {
+        appIcon: '核销',
+        appId: 'APP-TICKET-VERIFY-004',
+        appIntro: '为票务场景提供快速核销、异常订单提示和核销记录追踪。',
+        appName: '票务核销助手',
+        appType: '运营应用',
+        appUrl: 'https://saas.example.com/apps/ticket-verify',
+        id: 'app-004',
+        landingPageUrl: 'https://saas.example.com/landing/ticket-verify',
+        permissionApiFields:
+          'ticket.verify.create\nticket.verify.rollback\nticket.verify.log.view',
+        price: '149 元/月',
+        status: '已停用',
+        updatedAt: '2026-07-08 09:20',
+        visibility: '景区门店可见',
       },
     ],
     supportActions: [],
@@ -765,18 +1038,38 @@ function createInteractions(): PageInteractions {
 
 function createExplanations(): PageExplanations {
   return {
-    pageGoal: '管理应用档案、上架状态和可见范围。',
+    pageGoal: '管理应用档案、价格、入口、权限字段和应用状态。',
     description:
-      '用于维护 SaaS 应用的基本信息、上架状态以及不同版本或门店类型的可见性。',
+      '用于维护 SaaS 应用的基础资料、价格、落地页、应用入口、权限接口字段以及上下架和停用状态。',
     documentNotes: [
       '应用下架仅关闭新的开通入口，不影响已开通门店继续使用。',
+      '应用停用后，全部企业都将不再能够查看该应用，无法开通、无法使用。',
       '可见范围需要和业务版本、门店类型保持一致。',
     ],
     fields: [
+      { label: '应用ID', note: '应用唯一业务标识', required: true },
       { label: '应用名称', note: '应用在后台与前台展示的名称', required: true },
+      {
+        label: '应用图标',
+        note: '应用列表与应用入口展示的图标',
+        required: true,
+      },
       {
         label: '应用类型',
         note: '区分营销、运营、数据等应用类型',
+        required: true,
+      },
+      {
+        label: '应用介绍',
+        note: '说明应用能力、适用场景和核心价值',
+        required: true,
+      },
+      { label: '应用价格', note: '应用售卖价格或计费方式', required: true },
+      { label: '落地页地址', note: '应用介绍页或营销页地址', required: true },
+      { label: '应用地址', note: '应用实际访问入口地址', required: true },
+      {
+        label: '应用权限接口字段维护',
+        note: '维护应用权限码、接口标识或字段映射',
         required: true,
       },
       {
@@ -784,18 +1077,35 @@ function createExplanations(): PageExplanations {
         note: '定义哪些版本或门店类型可看到该应用',
         required: true,
       },
-      { label: '上架状态', note: '控制应用是否允许新门店开通', required: true },
+      {
+        label: '应用状态',
+        note: '控制应用开通、展示和使用状态',
+        required: true,
+      },
     ],
     processSteps: [
-      '通过应用名称、类型、上架状态筛选应用。',
-      '在抽屉中完成新增、编辑或可见性配置。',
-      '通过下架动作关闭当前应用的开通入口。',
+      '通过应用名称、类型、应用状态筛选应用。',
+      '在抽屉中完成新增或编辑应用资料。',
+      '通过上架和下架管理应用的新开通入口。',
+      '通过下架动作关闭当前应用的新开通入口。',
+      '通过启用和停用管理应用对企业的展示与使用能力。',
+      '通过停用动作关闭当前应用对所有企业的展示、开通和使用。',
     ],
-    permissionPoints: ['新增应用', '编辑应用', '设置可见性', '下架应用'],
+    permissionPoints: [
+      '新增应用',
+      '编辑应用',
+      '上架应用',
+      '下架应用',
+      '启用应用',
+      '停用应用',
+    ],
     exceptions: [
       '同名应用不允许重复创建。',
-      '可见范围为空时，不允许保存应用。',
+      '应用ID、图标、介绍、价格、地址、权限字段或可见范围为空时，不允许保存应用。',
+      '已上架应用不需要重复执行上架操作。',
       '已下架应用不需要重复执行下架操作。',
+      '非停用状态应用不需要执行启用操作。',
+      '已停用应用不需要重复执行停用操作。',
     ],
     statusTransitions: [
       {
@@ -806,9 +1116,21 @@ function createExplanations(): PageExplanations {
       },
       {
         current: '已下架',
-        trigger: '编辑并改为已上架',
+        trigger: '上架',
         target: '已上架',
         note: '重新上架后，符合可见范围的门店可再次开通。',
+      },
+      {
+        current: '已上架 / 已下架',
+        trigger: '停用',
+        target: '已停用',
+        note: '停用后所有企业均不可查看、开通或使用该应用。',
+      },
+      {
+        current: '已停用',
+        trigger: '启用',
+        target: '已上架',
+        note: '启用后恢复为已上架状态，重新允许企业查看、开通和使用。',
       },
     ],
   };
@@ -837,11 +1159,11 @@ function createExplanations(): PageExplanations {
           @submit.prevent="handleFilterSubmit"
         >
           <div class="saas-filter-grid">
-            <ElFormItem label="应用名称">
+            <ElFormItem label="应用名称/ID">
               <ElInput
                 v-model="filterState.appName"
                 clearable
-                placeholder="请输入应用名称"
+                placeholder="请输入应用名称或应用ID"
               />
             </ElFormItem>
 
@@ -861,12 +1183,12 @@ function createExplanations(): PageExplanations {
               </ElSelect>
             </ElFormItem>
 
-            <ElFormItem label="上架状态">
+            <ElFormItem label="应用状态">
               <ElSelect
                 v-model="filterState.status"
                 clearable
                 filterable
-                placeholder="请选择上架状态"
+                placeholder="请选择应用状态"
               >
                 <ElOption
                   v-for="option in appShelfStatusOptions"
@@ -902,8 +1224,13 @@ function createExplanations(): PageExplanations {
             min-width="150"
           >
             <template #default="{ row }">
+              <div v-if="column.key === 'appIcon'" class="app-icon-cell">
+                {{
+                  getAppIconText(getAppRow(row).appIcon, getAppRow(row).appName)
+                }}
+              </div>
               <ElTag
-                v-if="column.key === 'status'"
+                v-else-if="column.key === 'status'"
                 :type="getStatusTagType(getAppRow(row).status)"
               >
                 {{ getAppRow(row).status }}
@@ -916,7 +1243,7 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
-                  v-for="action in interactions.rowActions"
+                  v-for="action in getVisibleRowActions(getAppRow(row))"
                   :key="action.label"
                   link
                   :type="action.type || 'primary'"
@@ -1067,20 +1394,50 @@ function createExplanations(): PageExplanations {
       </template>
 
       <div
-        v-if="selectedApp && !hasActionFields && !isOfflineMode"
+        v-if="
+          selectedApp &&
+          !hasActionFields &&
+          !isOnlineMode &&
+          !isOfflineMode &&
+          !isEnableMode &&
+          !isDisabledMode
+        "
         class="flex flex-col gap-4"
       >
         <ElDescriptions :column="1" border>
+          <ElDescriptionsItem label="应用ID">
+            {{ selectedApp.appId }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="应用图标">
+            {{ selectedApp.appIcon }}
+          </ElDescriptionsItem>
           <ElDescriptionsItem label="应用名称">
             {{ selectedApp.appName }}
           </ElDescriptionsItem>
           <ElDescriptionsItem label="应用类型">
             {{ selectedApp.appType }}
           </ElDescriptionsItem>
+          <ElDescriptionsItem label="应用价格">
+            {{ selectedApp.price }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="应用介绍">
+            {{ selectedApp.appIntro }}
+          </ElDescriptionsItem>
           <ElDescriptionsItem label="可见范围">
             {{ selectedApp.visibility }}
           </ElDescriptionsItem>
-          <ElDescriptionsItem label="上架状态">
+          <ElDescriptionsItem label="落地页地址">
+            {{ selectedApp.landingPageUrl }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="应用地址">
+            {{ selectedApp.appUrl }}
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="应用权限接口字段">
+            <pre class="permission-api-preview">{{
+              selectedApp.permissionApiFields
+            }}</pre>
+          </ElDescriptionsItem>
+          <ElDescriptionsItem label="应用状态">
             <ElTag :type="getStatusTagType(selectedApp.status)">
               {{ selectedApp.status }}
             </ElTag>
@@ -1100,8 +1457,9 @@ function createExplanations(): PageExplanations {
         class="rounded-lg border border-dashed border-[var(--el-border-color)] p-4 text-sm leading-7"
       >
         <div>当前应用：{{ selectedApp.appName }}</div>
+        <div>应用ID：{{ selectedApp.appId }}</div>
         <div>当前状态：{{ selectedApp.status }}</div>
-        <div>下架后仅关闭新门店的开通入口。</div>
+        <div>{{ getStateActionTip() }}</div>
       </div>
 
       <ElEmpty
@@ -1205,10 +1563,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }
@@ -1271,5 +1628,29 @@ function createExplanations(): PageExplanations {
 .saas-data-table :deep(th.el-table__cell),
 .saas-data-table :deep(td.el-table__cell) {
   border-bottom-color: var(--el-border-color-lighter);
+}
+
+.app-icon-cell {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.permission-api-preview {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  line-height: 1.6;
 }
 </style>

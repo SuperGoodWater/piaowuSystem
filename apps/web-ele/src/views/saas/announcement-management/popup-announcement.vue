@@ -480,6 +480,18 @@ function getStatusTagType(status: PopupStatus) {
   return 'warning';
 }
 
+function getVisibleRowActions(row: PopupAnnouncementRecord) {
+  return interactions.rowActions.filter((action) => {
+    if (action.label === '设为生效') {
+      return row.status !== '生效中';
+    }
+    if (action.label === '下线') {
+      return row.status === '生效中';
+    }
+    return true;
+  });
+}
+
 function updatePopupRecord(
   id: string,
   patch: Partial<PopupAnnouncementRecord>,
@@ -923,6 +935,12 @@ function createExplanations(): PageExplanations {
         note: '下线后前台不再展示该弹窗公告。',
       },
       {
+        current: '已下线',
+        trigger: '设为生效',
+        target: '生效中',
+        note: '重新生效后弹窗公告恢复展示。',
+      },
+      {
         current: '生效中',
         trigger: '替换当前生效公告',
         target: '已下线',
@@ -1036,7 +1054,7 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
-                  v-for="action in interactions.rowActions"
+                  v-for="action in getVisibleRowActions(getPopupRow(row))"
                   :key="action.label"
                   link
                   :type="action.type || 'primary'"
@@ -1420,10 +1438,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }

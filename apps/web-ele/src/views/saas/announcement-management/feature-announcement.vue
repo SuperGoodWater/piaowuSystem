@@ -407,6 +407,18 @@ function getStatusTagType(status: PublishStatus) {
   return 'warning';
 }
 
+function getVisibleRowActions(row: FeatureRecord) {
+  return interactions.rowActions.filter((action) => {
+    if (action.label === '发布') {
+      return row.status !== '已发布';
+    }
+    if (action.label === '下线') {
+      return row.status === '已发布';
+    }
+    return true;
+  });
+}
+
 function updateFeatureRecord(id: string, patch: Partial<FeatureRecord>) {
   featureData.value = featureData.value.map((item) =>
     item.id === id
@@ -761,6 +773,12 @@ function createExplanations(): PageExplanations {
         target: '已下线',
         trigger: '下线',
       },
+      {
+        current: '已下线',
+        note: '重新发布后通知恢复展示。',
+        target: '已发布',
+        trigger: '发布',
+      },
     ],
   };
 }
@@ -869,7 +887,7 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
-                  v-for="action in interactions.rowActions"
+                  v-for="action in getVisibleRowActions(getFeatureRow(row))"
                   :key="action.label"
                   link
                   :type="action.type || 'primary'"
@@ -1282,10 +1300,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }

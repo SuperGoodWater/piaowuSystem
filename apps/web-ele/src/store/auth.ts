@@ -11,7 +11,10 @@ import { defineStore } from 'pinia';
 
 import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
 import { $t } from '#/locales';
-import { normalizeHomePath } from '#/router/helpers/home-path';
+import {
+  clearSelectedStore,
+  STORE_SELECT_PATH,
+} from '#/router/helpers/store-selection';
 
 export const useAuthStore = defineStore('auth', () => {
   const accessStore = useAccessStore();
@@ -56,7 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
         } else {
           onSuccess
             ? await onSuccess?.()
-            : await router.push(normalizeHomePath(userInfo.homePath));
+            : await router.push(STORE_SELECT_PATH);
         }
 
         if (userInfo?.realName) {
@@ -83,6 +86,7 @@ export const useAuthStore = defineStore('auth', () => {
       // 不做任何处理
     }
     resetAllStores();
+    clearSelectedStore();
     accessStore.setLoginExpired(false);
 
     // 回登录页带上当前路由地址

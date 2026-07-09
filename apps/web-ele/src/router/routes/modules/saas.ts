@@ -58,10 +58,10 @@ const routes: RouteRecordRaw[] = [
             component: () =>
               import('#/views/saas/product-management/application-list-management.vue'),
             meta: {
-              description: '管理应用上架、下架、可见性',
+              description: '管理应用资料、价格、上下架和停用状态',
               icon: 'lucide:layout-grid',
               priority: 'P1',
-              title: '应用列表管理',
+              title: '应用管理',
             },
             name: 'SaaSApplicationListManagement',
             path: 'application-list-management',
@@ -77,18 +77,6 @@ const routes: RouteRecordRaw[] = [
             },
             name: 'SaaSStoreVersionManagement',
             path: 'store-version-management',
-          },
-          {
-            component: () =>
-              import('#/views/saas/product-management/store-benefit-management.vue'),
-            meta: {
-              description: '管理门店权益及有效期',
-              icon: 'lucide:badge-check',
-              priority: 'P0',
-              title: '门店权益管理',
-            },
-            name: 'SaaSStoreBenefitManagement',
-            path: 'store-benefit-management',
           },
         ],
       },
@@ -112,18 +100,6 @@ const routes: RouteRecordRaw[] = [
             },
             name: 'SaaSDeviceList',
             path: 'device-list',
-          },
-          {
-            component: () =>
-              import('#/views/saas/platform-resource-management/device-brand.vue'),
-            meta: {
-              description: '管理设备品牌',
-              icon: 'lucide:shield-half',
-              priority: 'P1',
-              title: '设备品牌',
-            },
-            name: 'SaaSDeviceBrand',
-            path: 'device-brand',
           },
           {
             component: () =>

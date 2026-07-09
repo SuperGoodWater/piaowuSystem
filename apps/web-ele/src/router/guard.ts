@@ -9,7 +9,8 @@ import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
-import { normalizeHomePath } from './helpers/home-path';
+import { decodeRedirectPath, normalizeHomePath } from './helpers/home-path';
+import { getSelectedStore, STORE_SELECT_PATH } from './helpers/store-selection';
 
 /**
  * 通用守卫配置
@@ -54,9 +55,13 @@ function setupAccessGuard(router: Router) {
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
-        const redirectPath = to.query?.redirect
-          ? decodeURIComponent(to.query.redirect as string)
-          : userStore.userInfo?.homePath;
+        if (!getSelectedStore()) {
+          return STORE_SELECT_PATH;
+        }
+
+        const redirectPath =
+          decodeRedirectPath(to.query?.redirect) ??
+          preferences.app.defaultHomePath;
 
         return normalizeHomePath(redirectPath);
       }
@@ -88,6 +93,12 @@ function setupAccessGuard(router: Router) {
 
     // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
+      if (to.path !== STORE_SELECT_PATH && !getSelectedStore()) {
+        return {
+          path: STORE_SELECT_PATH,
+          replace: true,
+        };
+      }
       return true;
     }
 
@@ -111,11 +122,18 @@ function setupAccessGuard(router: Router) {
 
     const fallbackPath =
       to.path === preferences.app.defaultHomePath
-        ? userInfo.homePath
+        ? (userInfo.homePath ?? preferences.app.defaultHomePath)
         : to.fullPath;
     const redirectPath = normalizeHomePath(
-      decodeURIComponent((from.query.redirect ?? fallbackPath) as string),
+      decodeRedirectPath(from.query.redirect) ?? fallbackPath,
     );
+
+    if (redirectPath !== STORE_SELECT_PATH && !getSelectedStore()) {
+      return {
+        path: STORE_SELECT_PATH,
+        replace: true,
+      };
+    }
 
     return {
       ...router.resolve(redirectPath),

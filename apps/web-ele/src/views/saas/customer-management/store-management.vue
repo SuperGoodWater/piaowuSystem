@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import type { StoreRecord, StoreStatus } from './store-management-data';
+
 import type { VbenFormSchema } from '#/adapter/form';
 
 import { computed, ref, watch } from 'vue';
@@ -8,6 +10,7 @@ import { Page } from '@vben/common-ui';
 
 import {
   ElButton,
+  ElDatePicker,
   ElDescriptions,
   ElDescriptionsItem,
   ElDialog,
@@ -21,13 +24,14 @@ import {
   ElPagination,
   ElSelect,
   ElSpace,
+  ElSwitch,
   ElTable,
-  ElTabPane,
-  ElTabs,
   ElTag,
 } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
+
+import { storeManagementSampleData } from './store-management-data';
 
 interface SaaSColumnItem {
   key: string;
@@ -92,7 +96,7 @@ interface SaaSPageMeta {
   permissionPoints?: readonly string[];
   processSteps?: readonly string[];
   rowActions: readonly SaaSActionItem[];
-  sampleData: readonly Record<string, string>[];
+  sampleData: readonly StoreRecord[];
   statusTransitions?: readonly SaaSStatusTransitionItem[];
   supportActions?: readonly SaaSSupportAction[];
 }
@@ -186,23 +190,17 @@ type PageExplanations = Pick<
 
 type InteractionItem = SaaSActionItem;
 type FormFieldItem = SaaSFieldItem;
-type StoreStatus = '停用' | '启用' | '过期';
+type StoreAppAuthorizationStatus = '已关闭' | '已到期' | '生效中';
 
-interface StoreRecord {
-  address: string;
-  authorizationExpireAt: string;
-  createdAt: string;
-  detailAddress: string;
+interface StoreAppAuthorizationRecord {
+  appId: string;
+  appName: string;
+  endAt: string;
   id: string;
-  managerPhone: string;
-  managerUsername: string;
-  payRate: string;
-  status: StoreStatus;
-  storeCode: string;
-  storeName: string;
-  storeType: string;
-  tenantName: string;
-  version: string;
+  price: string;
+  startAt: string;
+  status: StoreAppAuthorizationStatus;
+  storeId: string;
 }
 
 const interactions = createInteractions();
@@ -221,12 +219,112 @@ const filterState = ref({
   tenantName: '',
 });
 const pageSize = ref(10);
-const maintenanceActiveTab = ref('basic');
+const paymentChannelVisible = ref(false);
+const paymentFeeVisible = ref(false);
+const appAuthorizationDialogVisible = ref(false);
+const activeAppAuthorizationAction = ref<'开通应用' | '续期授权'>('开通应用');
 const maintenanceVersion = ref('');
+const selectedAppAuthorizationId = ref('');
 const selectedStoreId = ref('');
 const storeData = ref<StoreRecord[]>(
   interactions.sampleData.map((item) => normalizeStoreRecord(item)),
 );
+const paymentChannelForm = ref({
+  b2bTerminalNo: 'H1859015',
+  cashierTerminalNo: 'H1859024',
+  defaultPayment: true,
+  enabled: true,
+  internalMerchantNo: '30',
+  lklMode: 'OP00001021',
+  merchantAppId: '800000020021015',
+  merchantNo: '82255104733005E',
+  miniProgramAppId: 'wxaf71326db6fe3f51',
+  miniProgramSecret: '329ba4e853c2e5fd643b370ef1258',
+  officialAccountAppId: 'wxd0701fd4cdf2b9fa',
+  officialAccountSecret: '',
+  paymentConfig: '拉卡拉支付(乐悠游)',
+  paymentName: '拉卡拉支付',
+  paymentRate: '0',
+});
+const paymentFeeForm = ref({
+  alipayRate: '',
+  creditCardRate: '',
+  debitCardLimit: '20',
+  debitCardRate: '',
+  unionQrCreditRate: '',
+  unionQrDebitLimit: '20',
+  unionQrDebitRate: '',
+  wechatRate: '',
+  withdrawFee: '',
+});
+const appAuthorizationForm = ref({
+  appId: '',
+  dateRange: [] as string[],
+});
+const availableApplications = [
+  {
+    appId: 'APP-MEMBER-001',
+    appName: '会员营销中心',
+    price: '199 元/月',
+  },
+  {
+    appId: 'APP-INSPECTION-002',
+    appName: '门店巡检台',
+    price: '99 元/月',
+  },
+  {
+    appId: 'APP-ANALYTICS-003',
+    appName: '经营分析看板',
+    price: '299 元/月',
+  },
+  {
+    appId: 'APP-TICKET-VERIFY-004',
+    appName: '票务核销助手',
+    price: '149 元/月',
+  },
+] as const;
+const appAuthorizationData = ref<StoreAppAuthorizationRecord[]>([
+  {
+    appId: 'APP-MEMBER-001',
+    appName: '会员营销中心',
+    endAt: '2027-06-30',
+    id: 'auth-store-001-member',
+    price: '199 元/月',
+    startAt: '2026-07-01',
+    status: '生效中',
+    storeId: 'store-001',
+  },
+  {
+    appId: 'APP-ANALYTICS-003',
+    appName: '经营分析看板',
+    endAt: '2027-06-30',
+    id: 'auth-store-001-analytics',
+    price: '299 元/月',
+    startAt: '2026-07-01',
+    status: '生效中',
+    storeId: 'store-001',
+  },
+  {
+    appId: 'APP-INSPECTION-002',
+    appName: '门店巡检台',
+    endAt: '2026-12-31',
+    id: 'auth-store-002-inspection',
+    price: '99 元/月',
+    startAt: '2026-07-02',
+    status: '已到期',
+    storeId: 'store-002',
+  },
+  {
+    appId: 'APP-TICKET-VERIFY-004',
+    appName: '票务核销助手',
+    endAt: '2027-03-31',
+    id: 'auth-store-003-ticket',
+    price: '149 元/月',
+    startAt: '2026-07-03',
+    status: '已关闭',
+    storeId: 'store-003',
+  },
+]);
 
 const pageTitle = computed(() => String(route.meta.title ?? '门店管理'));
 const pagePriority = computed(() => String(route.meta.priority ?? 'P0'));
@@ -250,12 +348,24 @@ const activeInteraction = computed(() => {
   return baseAction;
 });
 const isCreateMode = computed(() => activeAction.value === '新建门店');
-const isMaintenanceMode = computed(() => activeAction.value === '维护');
+const isDelayMode = computed(() => activeAction.value === '延期');
+const isBasicInfoMode = computed(() => activeAction.value === '基础信息');
+const isAuthorizationMode = computed(() => activeAction.value === '功能授权');
+const isPaymentMode = computed(() => activeAction.value === '支付配置');
+const isMaintenanceMode = computed(
+  () =>
+    isBasicInfoMode.value || isAuthorizationMode.value || isPaymentMode.value,
+);
 const hasActionFields = computed(() =>
   Boolean(activeInteraction.value?.fields?.length),
 );
-const showResetButton = computed(() => isCreateMode.value);
-const showSubmitButton = computed(() => isCreateMode.value);
+const showResetButton = computed(() => isCreateMode.value || isDelayMode.value);
+const showSubmitButton = computed(
+  () => isCreateMode.value || isDelayMode.value,
+);
+const submitButtonText = computed(() =>
+  isDelayMode.value ? '确认延期' : '保存',
+);
 const filteredStores = computed(() => {
   const name = filterState.value.storeName.trim().toLowerCase();
   const tenantName = filterState.value.tenantName;
@@ -293,6 +403,15 @@ const activeInteractionFieldsData = computed(() =>
 const maintenanceFeatureItems = computed(() =>
   getVersionFeatureItems(selectedStore.value?.version ?? ''),
 );
+const selectedStoreAppAuthorizations = computed(() => {
+  if (!selectedStore.value) {
+    return [];
+  }
+
+  return appAuthorizationData.value.filter(
+    (item) => item.storeId === selectedStore.value?.id,
+  );
+});
 
 const [DetailActionForm, detailActionFormApi] = useVbenForm({
   commonConfig: {
@@ -498,7 +617,7 @@ function generateStoreCode() {
   return `ST${String(maxNumber + 1).padStart(4, '0')}`;
 }
 
-function normalizeStoreRecord(record: Record<string, string>): StoreRecord {
+function normalizeStoreRecord(record: StoreRecord): StoreRecord {
   return {
     address: record.address ?? '待补充地址',
     authorizationExpireAt:
@@ -538,6 +657,16 @@ function getStatusTagType(status: StoreStatus) {
   }
 }
 
+function getAppAuthorizationStatusTagType(status: StoreAppAuthorizationStatus) {
+  if (status === '生效中') {
+    return 'success';
+  }
+  if (status === '已到期') {
+    return 'warning';
+  }
+  return 'info';
+}
+
 function getVersionFeatureItems(version: string) {
   switch (version) {
     case '专业版':
@@ -559,15 +688,183 @@ function getVersionFeatureItems(version: string) {
 function openAction(action: InteractionItem, row?: StoreRecord) {
   activeAction.value = action.label;
   selectedStoreId.value = row?.id ?? '';
-  maintenanceActiveTab.value = 'basic';
   maintenanceVersion.value = row?.version ?? '';
   applyInteractionForm(action);
+
+  if (action.label === '延期' && row) {
+    detailActionFormApi.resetForm({
+      values: {
+        newAuthorizationExpireAt: row.authorizationExpireAt,
+      },
+    });
+  }
+
   detailVisible.value = true;
 }
 
 function handleRowAction(action: InteractionItem, row: Record<string, any>) {
   const storeRow = getStoreRow(row);
   openAction(action, storeRow);
+}
+
+function openStoreDelayAction(row: StoreRecord) {
+  const delayAction = actionCatalog.value.find((item) => item.label === '延期');
+
+  if (delayAction) {
+    openAction(delayAction, row);
+  }
+}
+
+function openPaymentChannelDialog() {
+  paymentChannelVisible.value = true;
+}
+
+function openPaymentFeeDialog() {
+  paymentFeeVisible.value = true;
+}
+
+function resetAppAuthorizationForm() {
+  appAuthorizationForm.value = {
+    appId: '',
+    dateRange: [],
+  };
+}
+
+function openCreateAppAuthorizationDialog() {
+  activeAppAuthorizationAction.value = '开通应用';
+  selectedAppAuthorizationId.value = '';
+  resetAppAuthorizationForm();
+  appAuthorizationDialogVisible.value = true;
+}
+
+function getAppAuthorizationRow(
+  row: Record<string, any>,
+): StoreAppAuthorizationRecord {
+  return {
+    appId: row.appId ?? '',
+    appName: row.appName ?? '',
+    endAt: row.endAt ?? '',
+    id: row.id ?? '',
+    price: row.price ?? '',
+    startAt: row.startAt ?? '',
+    status: row.status ?? '生效中',
+    storeId: row.storeId ?? '',
+  };
+}
+
+function openRenewAppAuthorizationDialog(row: Record<string, any>) {
+  const record = getAppAuthorizationRow(row);
+  activeAppAuthorizationAction.value = '续期授权';
+  selectedAppAuthorizationId.value = record.id;
+  appAuthorizationForm.value = {
+    appId: record.appId,
+    dateRange: [record.startAt, record.endAt],
+  };
+  appAuthorizationDialogVisible.value = true;
+}
+
+function saveAppAuthorization() {
+  if (!selectedStore.value) {
+    ElMessage.warning('未找到当前门店，请重新选择');
+    return;
+  }
+
+  const app = availableApplications.find(
+    (item) => item.appId === appAuthorizationForm.value.appId,
+  );
+  const [startAt, endAt] = appAuthorizationForm.value.dateRange;
+
+  if (!app || !startAt || !endAt) {
+    ElMessage.warning('请先选择应用和授权时间');
+    return;
+  }
+
+  if (startAt > endAt) {
+    ElMessage.warning('授权结束时间不能早于开始时间');
+    return;
+  }
+
+  if (activeAppAuthorizationAction.value === '续期授权') {
+    appAuthorizationData.value = appAuthorizationData.value.map((item) =>
+      item.id === selectedAppAuthorizationId.value
+        ? {
+            ...item,
+            endAt,
+            startAt,
+            status: '生效中',
+          }
+        : item,
+    );
+    ElMessage.success(`已续期应用授权：${app.appName}`);
+  } else {
+    const duplicated = appAuthorizationData.value.some(
+      (item) =>
+        item.storeId === selectedStore.value?.id &&
+        item.appId === app.appId &&
+        item.status === '生效中',
+    );
+
+    if (duplicated) {
+      ElMessage.warning('当前门店已存在生效中的同应用授权');
+      return;
+    }
+
+    appAuthorizationData.value.unshift({
+      appId: app.appId,
+      appName: app.appName,
+      endAt,
+      id: `auth-${Date.now()}`,
+      price: app.price,
+      startAt,
+      status: '生效中',
+      storeId: selectedStore.value.id,
+    });
+    ElMessage.success(
+      `已为 ${selectedStore.value.storeName} 开通应用：${app.appName}`,
+    );
+  }
+
+  appAuthorizationDialogVisible.value = false;
+  resetAppAuthorizationForm();
+}
+
+function closeAppAuthorization(row: Record<string, any>) {
+  const record = getAppAuthorizationRow(row);
+
+  if (record.status === '已关闭') {
+    ElMessage.info('当前应用授权已关闭');
+    return;
+  }
+
+  appAuthorizationData.value = appAuthorizationData.value.map((item) =>
+    item.id === record.id
+      ? {
+          ...item,
+          status: '已关闭',
+        }
+      : item,
+  );
+  ElMessage.success(`已关闭应用授权：${record.appName}`);
+}
+
+function savePaymentChannel() {
+  if (!paymentChannelForm.value.paymentConfig.trim()) {
+    ElMessage.warning('请选择支付配置');
+    return;
+  }
+
+  if (!paymentChannelForm.value.paymentName.trim()) {
+    ElMessage.warning('请输入支付名称');
+    return;
+  }
+
+  paymentChannelVisible.value = false;
+  ElMessage.success('支付通道已保存');
+}
+
+function savePaymentFee() {
+  paymentFeeVisible.value = false;
+  ElMessage.success('费率配置已保存');
 }
 
 function closeDetailDrawer() {
@@ -714,9 +1011,48 @@ function getMaintenanceStatusTip(status: StoreStatus) {
     : '启用后，门店将继续使用业务能力。';
 }
 
+async function delayStore(values: Record<string, any>) {
+  if (!selectedStore.value) {
+    ElMessage.warning('未找到当前门店，请重新选择');
+    closeDetailDrawer();
+    return;
+  }
+
+  const newAuthorizationExpireAt = String(
+    values.newAuthorizationExpireAt ?? '',
+  ).trim();
+
+  if (!newAuthorizationExpireAt) {
+    ElMessage.warning('请选择新的授权到期日');
+    return;
+  }
+
+  if (newAuthorizationExpireAt <= selectedStore.value.authorizationExpireAt) {
+    ElMessage.warning('新的授权到期日必须晚于当前到期日');
+    return;
+  }
+
+  const nextStatus =
+    selectedStore.value.status === '过期' ? '启用' : selectedStore.value.status;
+
+  updateStoreRecord(selectedStore.value.id, {
+    authorizationExpireAt: newAuthorizationExpireAt,
+    status: nextStatus,
+  });
+  ElMessage.success(
+    `已延期 ${selectedStore.value.storeName} 至 ${newAuthorizationExpireAt}`,
+  );
+  closeDetailDrawer();
+}
+
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
     await createStore(values);
+    return;
+  }
+
+  if (isDelayMode.value) {
+    await delayStore(values);
   }
 }
 
@@ -737,7 +1073,6 @@ watch(detailVisible, (visible) => {
   if (!visible) {
     activeAction.value = '';
     detailExplanationVisible.value = false;
-    maintenanceActiveTab.value = 'basic';
     maintenanceVersion.value = '';
     selectedStoreId.value = '';
     applyInteractionForm();
@@ -804,13 +1139,13 @@ function createInteractions(): PageInteractions {
             required: true,
           }),
         ],
-        goal: '创建门店并为后续版本与权益配置建立基础。',
+        goal: '创建门店并为后续版本与应用授权建立基础。',
         permissionPoints: ['新建'],
         processSteps: [
           '点击“新建门店”。',
           '录入门店基础字段与管理员账号信息。',
           '提交后生成门店。',
-          '创建成功后继续配置版本和权益。',
+          '创建成功后继续配置版本和应用授权。',
         ],
       },
     ],
@@ -829,147 +1164,68 @@ function createInteractions(): PageInteractions {
     ],
     rowActions: [
       {
-        label: '维护',
+        label: '基础信息',
         description: '维护门店基础信息、功能授权、版本和支付信息。',
-        goal: '集中维护门店当前配置与状态。',
+        goal: '查看门店资料、切换门店版本，并处理门店启停状态。',
         permissionPoints: ['查看', '切换版本'],
         processSteps: [
-          '进入维护抽屉。',
-          '在基础信息中查看门店资料、切换版本，并处理停用或启用。',
-          '在功能授权和支付信息中确认当前配置。',
+          '从列表点击“基础信息”。',
+          '查看门店资料、管理员账号和地址信息。',
+          '按需切换版本或处理停用、启用。',
+        ],
+      },
+      {
+        label: '功能授权',
+        description: '查看门店授权版本、应用授权、授权到期时间和当前功能。',
+        goal: '确认门店版本能力、应用授权和有效期。',
+        permissionPoints: ['查看', '开通应用', '续期授权', '关闭授权', '延期'],
+        processSteps: [
+          '从列表点击“功能授权”。',
+          '查看授权版本、授权状态、版本基础功能和门店应用授权。',
+          '按需开通应用、续期授权或关闭应用授权。',
+          '如需延长门店整体授权有效期，点击“延期”。',
+        ],
+      },
+      {
+        label: '支付配置',
+        description: '查看门店支付费率、所属租户和管理员手机号等支付关联信息。',
+        goal: '确认门店支付配置和结算关联信息。',
+        permissionPoints: ['查看'],
+        processSteps: [
+          '从列表点击“支付配置”。',
+          '查看支付费率、所属租户和门店编号。',
+          '按需维护支付通道或设置费率。',
+        ],
+      },
+      {
+        label: '延期',
+        type: 'success',
+        description: '延长门店授权到期时间，并在过期门店延期成功后恢复启用。',
+        fields: [
+          {
+            field: 'newAuthorizationExpireAt',
+            inputType: 'date',
+            label: '新的授权到期日',
+            note: '必须晚于当前授权到期日',
+            required: true,
+          },
+          createTextareaField({
+            field: 'delayReason',
+            label: '延期原因',
+            note: '记录本次延期的业务说明',
+            rows: 3,
+          }),
+        ],
+        goal: '延长门店授权有效期。',
+        permissionPoints: ['延期'],
+        processSteps: [
+          '从门店列表点击“延期”。',
+          '选择晚于当前授权到期日的新日期。',
+          '提交后更新授权到期时间；过期门店会恢复为启用。',
         ],
       },
     ],
-    sampleData: [
-      {
-        address: '深圳市南山区欢乐谷园区主入口',
-        authorizationExpireAt: '2027-06-30',
-        createdAt: '2026-07-01 10:30',
-        detailAddress: '欢乐谷东区 1 号服务中心',
-        id: 'store-001',
-        managerPhone: '13600009999',
-        managerUsername: 'happy_valley_east',
-        payRate: '0.55%',
-        status: '启用',
-        storeCode: 'ST0001',
-        storeName: '欢乐谷东区店',
-        storeType: '景区门店',
-        tenantName: '星河票务集团',
-        version: '旗舰版',
-      },
-      {
-        address: '青岛市市南区海岸线游客中心',
-        authorizationExpireAt: '2026-12-31',
-        createdAt: '2026-07-02 15:00',
-        detailAddress: '海岸线游客中心 2 楼',
-        id: 'store-002',
-        managerPhone: '13700008888',
-        managerUsername: 'coast_visitor_center',
-        payRate: '0.68%',
-        status: '过期',
-        storeCode: 'ST0002',
-        storeName: '海岸线游客中心',
-        storeType: '零售门店',
-        tenantName: '海岸线文旅',
-        version: '基础版',
-      },
-      {
-        address: '广州市番禺区欢乐谷西区',
-        authorizationExpireAt: '2027-03-31',
-        createdAt: '2026-07-03 09:15',
-        detailAddress: '欢乐谷西区售票处旁',
-        id: 'store-003',
-        managerPhone: '13800007777',
-        managerUsername: 'happy_valley_west',
-        payRate: '0.60%',
-        status: '停用',
-        storeCode: 'ST0003',
-        storeName: '欢乐谷西区店',
-        storeType: '景区门店',
-        tenantName: '星河票务集团',
-        version: '专业版',
-      },
-      {
-        address: '上海市浦东新区星河集团总部',
-        authorizationExpireAt: '2028-07-04',
-        createdAt: '2026-07-04 11:20',
-        detailAddress: '星河总部 3 楼运营中心',
-        id: 'store-004',
-        managerPhone: '13900006666',
-        managerUsername: 'galaxy_hq_store',
-        payRate: '0.45%',
-        status: '启用',
-        storeCode: 'ST0004',
-        storeName: '星河总部旗舰店',
-        storeType: '集团门店',
-        tenantName: '星河票务集团',
-        version: '旗舰版',
-      },
-      {
-        address: '深圳市南山区欢乐谷美食街',
-        authorizationExpireAt: '2027-07-05',
-        createdAt: '2026-07-05 13:45',
-        detailAddress: '欢乐谷美食街 A12 档口',
-        id: 'store-005',
-        managerPhone: '13500005555',
-        managerUsername: 'happy_food_a12',
-        payRate: '0.72%',
-        status: '启用',
-        storeCode: 'ST0005',
-        storeName: '欢乐谷美食街店',
-        storeType: '餐饮门店',
-        tenantName: '星河票务集团',
-        version: '专业版',
-      },
-      {
-        address: '厦门市思明区海岸线度假酒店',
-        authorizationExpireAt: '2027-10-31',
-        createdAt: '2026-07-06 08:50',
-        detailAddress: '酒店前厅 PMS 服务台',
-        id: 'store-006',
-        managerPhone: '13400004444',
-        managerUsername: 'coast_hotel_pms',
-        payRate: '0.58%',
-        status: '启用',
-        storeCode: 'ST0006',
-        storeName: '海岸线度假酒店 PMS',
-        storeType: 'PMS',
-        tenantName: '海岸线文旅',
-        version: '专业版',
-      },
-      {
-        address: '青岛市崂山区海岸线礼品中心',
-        authorizationExpireAt: '2027-01-15',
-        createdAt: '2026-07-07 16:10',
-        detailAddress: '礼品中心 1 层收银区',
-        id: 'store-007',
-        managerPhone: '13300003333',
-        managerUsername: 'coast_gift_shop',
-        payRate: '0.70%',
-        status: '停用',
-        storeCode: 'ST0007',
-        storeName: '海岸线礼品中心',
-        storeType: '零售门店',
-        tenantName: '海岸线文旅',
-        version: '基础版',
-      },
-      {
-        address: '杭州市西湖区星河城市会客厅',
-        authorizationExpireAt: '2026-11-30',
-        createdAt: '2026-07-08 10:05',
-        detailAddress: '城市会客厅 B 区综合服务台',
-        id: 'store-008',
-        managerPhone: '13200002222',
-        managerUsername: 'galaxy_city_lounge',
-        payRate: '0.62%',
-        status: '过期',
-        storeCode: 'ST0008',
-        storeName: '星河城市会客厅',
-        storeType: '集团门店',
-        tenantName: '星河票务集团',
-        version: '基础版',
-      },
-    ],
+    sampleData: storeManagementSampleData,
     supportActions: [],
   };
 }
@@ -977,11 +1233,13 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理门店基础信息、管理员账号、版本和状态，覆盖新建、维护、停用和启用等核心动作。',
+      '管理门店基础信息、管理员账号、版本、应用授权和状态，覆盖新建、维护、停用和启用等核心动作。',
     documentNotes: [
       '门店类型创建成功后不可修改。',
       '版本切换后，能力边界会立即按新版本生效。',
+      '应用授权归属于具体门店，可在功能授权中完成开通、续期和关闭。',
       '停用门店后，门店业务能力将暂停使用；重新启用后可继续使用。',
+      '延期时新的授权到期日必须晚于当前授权到期日。',
     ],
     exceptions: [
       '门店名称或管理员手机号重复时，不允许创建。',
@@ -1001,11 +1259,22 @@ function createExplanations(): PageExplanations {
       { label: '门店状态', note: '启用、停用或过期' },
     ],
     pageGoal: '查看与筛选门店，并完成门店生命周期内的关键管理动作。',
-    permissionPoints: ['查看', '新建', '切换版本', '停用', '启用'],
+    permissionPoints: [
+      '查看',
+      '新建',
+      '切换版本',
+      '开通应用',
+      '续期授权',
+      '关闭授权',
+      '延期',
+      '停用',
+      '启用',
+    ],
     processSteps: [
       '通过门店名称、所属租户、门店类型和状态筛选目标门店。',
-      '从列表进入维护动作。',
-      '在维护抽屉中查看基础信息、功能授权和支付信息，并完成版本切换、停用或启用。',
+      '从列表操作栏进入基础信息、功能授权、支付信息或延期动作。',
+      '在功能授权中完成版本切换、门店应用授权开通、续期、关闭和延期。',
+      '在对应抽屉中完成停用或启用。',
       '提交后即时刷新门店状态与版本信息。',
     ],
     statusTransitions: [
@@ -1017,9 +1286,9 @@ function createExplanations(): PageExplanations {
       },
       {
         current: '启用',
-        note: '权益到期后系统自动置为过期。',
+        note: '门店整体授权到期后系统自动置为过期。',
         target: '过期',
-        trigger: '权益到期',
+        trigger: '授权到期',
       },
       {
         current: '停用',
@@ -1032,6 +1301,12 @@ function createExplanations(): PageExplanations {
         note: '处理续费后可重新启用。',
         target: '启用',
         trigger: '启用',
+      },
+      {
+        current: '过期',
+        note: '延期成功后恢复授权可用状态。',
+        target: '启用',
+        trigger: '延期',
       },
     ],
   };
@@ -1363,129 +1638,240 @@ function createExplanations(): PageExplanations {
           </div>
         </div>
 
-        <ElTabs v-model="maintenanceActiveTab" class="maintenance-tabs">
-          <ElTabPane label="基础信息" name="basic">
-            <div class="flex flex-col gap-4">
-              <ElDescriptions :column="1" border>
-                <ElDescriptionsItem label="门店编号">
-                  {{ selectedStore.storeCode }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="所属租户">
-                  {{ selectedStore.tenantName }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="门店类型">
-                  {{ selectedStore.storeType }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="管理员账号">
-                  {{ selectedStore.managerUsername }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="管理员手机号">
-                  {{ selectedStore.managerPhone }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="当前版本">
-                  {{ selectedStore.version }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="创建时间">
-                  {{ selectedStore.createdAt }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="门店地址">
-                  {{ selectedStore.address }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="详细地址">
-                  {{ selectedStore.detailAddress }}
-                </ElDescriptionsItem>
-              </ElDescriptions>
+        <div v-if="isBasicInfoMode" class="flex flex-col gap-4">
+          <ElDescriptions :column="1" border>
+            <ElDescriptionsItem label="门店编号">
+              {{ selectedStore.storeCode }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="所属租户">
+              {{ selectedStore.tenantName }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="门店类型">
+              {{ selectedStore.storeType }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="管理员账号">
+              {{ selectedStore.managerUsername }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="管理员手机号">
+              {{ selectedStore.managerPhone }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="当前版本">
+              {{ selectedStore.version }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="创建时间">
+              {{ selectedStore.createdAt }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="门店地址">
+              {{ selectedStore.address }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="详细地址">
+              {{ selectedStore.detailAddress }}
+            </ElDescriptionsItem>
+          </ElDescriptions>
 
-              <div class="drawer-section-card">
-                <div class="text-sm font-medium">切换版本</div>
-                <div class="mt-3 flex flex-wrap items-center gap-3">
-                  <ElSelect
-                    v-model="maintenanceVersion"
-                    class="maintenance-version-select"
-                    placeholder="请选择目标版本"
-                  >
-                    <ElOption label="基础版" value="基础版" />
-                    <ElOption label="专业版" value="专业版" />
-                    <ElOption label="旗舰版" value="旗舰版" />
-                  </ElSelect>
-                  <ElButton type="primary" @click="saveMaintenanceVersion">
-                    保存版本
-                  </ElButton>
-                </div>
-                <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
-                  版本切换后，功能授权会按新版本能力边界立即更新。
-                </div>
-              </div>
-
-              <div class="drawer-section-card">
-                <div class="text-sm font-medium">门店状态</div>
-                <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
-                  {{ getMaintenanceStatusTip(selectedStore.status) }}
-                </div>
-                <div class="mt-3 flex flex-wrap items-center gap-3">
-                  <ElTag :type="getStatusTagType(selectedStore.status)">
-                    {{ selectedStore.status }}
-                  </ElTag>
-                  <ElButton
-                    :type="getMaintenanceStatusButtonType(selectedStore.status)"
-                    @click="toggleMaintenanceStatus"
-                  >
-                    {{ getMaintenanceStatusButtonText(selectedStore.status) }}
-                  </ElButton>
-                </div>
-              </div>
+          <div class="drawer-section-card">
+            <div class="text-sm font-medium">门店状态</div>
+            <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
+              {{ getMaintenanceStatusTip(selectedStore.status) }}
             </div>
-          </ElTabPane>
-
-          <ElTabPane label="功能授权" name="authorization">
-            <div class="flex flex-col gap-4">
-              <ElDescriptions :column="1" border>
-                <ElDescriptionsItem label="授权版本">
-                  {{ selectedStore.version }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="授权到期">
-                  {{ selectedStore.authorizationExpireAt }}
-                </ElDescriptionsItem>
-                <ElDescriptionsItem label="授权状态">
-                  <ElTag :type="getStatusTagType(selectedStore.status)">
-                    {{ selectedStore.status }}
-                  </ElTag>
-                </ElDescriptionsItem>
-              </ElDescriptions>
-
-              <div class="drawer-section-card">
-                <div class="text-sm font-medium">已授权功能</div>
-                <ul
-                  class="mt-2 list-disc pl-5 text-sm leading-7 text-[var(--el-text-color-primary)]"
-                >
-                  <li v-for="feature in maintenanceFeatureItems" :key="feature">
-                    {{ feature }}
-                  </li>
-                </ul>
-              </div>
+            <div class="mt-3 flex flex-wrap items-center gap-3">
+              <ElTag :type="getStatusTagType(selectedStore.status)">
+                {{ selectedStore.status }}
+              </ElTag>
+              <ElButton
+                :type="getMaintenanceStatusButtonType(selectedStore.status)"
+                @click="toggleMaintenanceStatus"
+              >
+                {{ getMaintenanceStatusButtonText(selectedStore.status) }}
+              </ElButton>
             </div>
-          </ElTabPane>
+          </div>
+        </div>
 
-          <ElTabPane label="支付信息" name="payment">
-            <ElDescriptions :column="1" border>
-              <ElDescriptionsItem label="支付费率">
-                {{ selectedStore.payRate }}
-              </ElDescriptionsItem>
-              <ElDescriptionsItem label="所属租户">
-                {{ selectedStore.tenantName }}
-              </ElDescriptionsItem>
-              <ElDescriptionsItem label="门店名称">
-                {{ selectedStore.storeName }}
-              </ElDescriptionsItem>
-              <ElDescriptionsItem label="门店编号">
-                {{ selectedStore.storeCode }}
-              </ElDescriptionsItem>
-              <ElDescriptionsItem label="管理员手机号">
-                {{ selectedStore.managerPhone }}
-              </ElDescriptionsItem>
-            </ElDescriptions>
-          </ElTabPane>
-        </ElTabs>
+        <div v-else-if="isAuthorizationMode" class="flex flex-col gap-4">
+          <ElDescriptions :column="1" border>
+            <ElDescriptionsItem label="授权版本">
+              {{ selectedStore.version }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="授权到期">
+              {{ selectedStore.authorizationExpireAt }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="授权状态">
+              <ElTag :type="getStatusTagType(selectedStore.status)">
+                {{ selectedStore.status }}
+              </ElTag>
+            </ElDescriptionsItem>
+          </ElDescriptions>
+
+          <div class="drawer-section-card">
+            <div class="text-sm font-medium">切换版本</div>
+            <div class="mt-3 flex flex-wrap items-center gap-3">
+              <ElSelect
+                v-model="maintenanceVersion"
+                class="maintenance-version-select"
+                placeholder="请选择目标版本"
+              >
+                <ElOption label="基础版" value="基础版" />
+                <ElOption label="专业版" value="专业版" />
+                <ElOption label="旗舰版" value="旗舰版" />
+              </ElSelect>
+              <ElButton type="primary" @click="saveMaintenanceVersion">
+                保存版本
+              </ElButton>
+            </div>
+            <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
+              版本切换后，功能授权会按新版本能力边界立即更新。
+            </div>
+          </div>
+
+          <div class="drawer-section-card">
+            <div class="text-sm font-medium">授权延期</div>
+            <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
+              延期会更新门店授权到期日；若当前门店已过期，延期成功后会恢复启用。
+            </div>
+            <div class="mt-3">
+              <ElButton
+                type="success"
+                @click="openStoreDelayAction(selectedStore)"
+              >
+                延期
+              </ElButton>
+            </div>
+          </div>
+
+          <div class="drawer-section-card">
+            <div class="text-sm font-medium">版本基础功能</div>
+            <ul
+              class="mt-2 list-disc pl-5 text-sm leading-7 text-[var(--el-text-color-primary)]"
+            >
+              <li v-for="feature in maintenanceFeatureItems" :key="feature">
+                {{ feature }}
+              </li>
+            </ul>
+          </div>
+
+          <div class="drawer-section-card">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium">门店应用授权</div>
+                <div class="mt-1 text-sm text-[var(--el-text-color-secondary)]">
+                  维护当前门店已开通应用、授权有效期和使用状态。
+                </div>
+              </div>
+              <ElButton
+                type="primary"
+                @click="openCreateAppAuthorizationDialog"
+              >
+                开通应用
+              </ElButton>
+            </div>
+
+            <ElTable
+              class="mt-3"
+              :data="selectedStoreAppAuthorizations"
+              size="small"
+              stripe
+            >
+              <ElTable.TableColumn
+                label="应用ID"
+                prop="appId"
+                min-width="150"
+              />
+              <ElTable.TableColumn
+                label="应用名称"
+                prop="appName"
+                min-width="150"
+              />
+              <ElTable.TableColumn label="价格" prop="price" min-width="110" />
+              <ElTable.TableColumn
+                label="开始时间"
+                prop="startAt"
+                min-width="120"
+              />
+              <ElTable.TableColumn
+                label="到期时间"
+                prop="endAt"
+                min-width="120"
+              />
+              <ElTable.TableColumn label="状态" min-width="100">
+                <template #default="{ row }">
+                  <ElTag :type="getAppAuthorizationStatusTagType(row.status)">
+                    {{ row.status }}
+                  </ElTag>
+                </template>
+              </ElTable.TableColumn>
+              <ElTable.TableColumn label="操作" fixed="right" min-width="130">
+                <template #default="{ row }">
+                  <ElSpace wrap>
+                    <ElButton
+                      link
+                      type="success"
+                      @click="openRenewAppAuthorizationDialog(row)"
+                    >
+                      续期
+                    </ElButton>
+                    <ElButton
+                      v-if="row.status !== '已关闭'"
+                      link
+                      type="danger"
+                      @click="closeAppAuthorization(row)"
+                    >
+                      关闭
+                    </ElButton>
+                  </ElSpace>
+                </template>
+              </ElTable.TableColumn>
+            </ElTable>
+          </div>
+        </div>
+
+        <div v-else-if="isPaymentMode" class="flex flex-col gap-4">
+          <div class="drawer-section-card">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium">支付通道</div>
+                <div class="mt-1 text-sm text-[var(--el-text-color-secondary)]">
+                  维护门店收款通道、终端号和小程序/公众号配置。
+                </div>
+              </div>
+              <ElButton type="primary" @click="openPaymentChannelDialog">
+                新建通道
+              </ElButton>
+            </div>
+          </div>
+
+          <div class="drawer-section-card">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium">费率配置</div>
+                <div class="mt-1 text-sm text-[var(--el-text-color-secondary)]">
+                  设置借记卡、微信、支付宝、银联二维码和提现手续费。
+                </div>
+              </div>
+              <ElButton type="primary" @click="openPaymentFeeDialog">
+                设置费率
+              </ElButton>
+            </div>
+          </div>
+
+          <ElDescriptions :column="1" border>
+            <ElDescriptionsItem label="当前支付费率">
+              {{ selectedStore.payRate }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="所属租户">
+              {{ selectedStore.tenantName }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="门店名称">
+              {{ selectedStore.storeName }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="门店编号">
+              {{ selectedStore.storeCode }}
+            </ElDescriptionsItem>
+            <ElDescriptionsItem label="管理员手机号">
+              {{ selectedStore.managerPhone }}
+            </ElDescriptionsItem>
+          </ElDescriptions>
+        </div>
       </div>
 
       <div v-else-if="hasActionFields" class="flex flex-col gap-4">
@@ -1510,11 +1896,205 @@ function createExplanations(): PageExplanations {
             type="primary"
             @click="submitActiveAction"
           >
-            保存
+            {{ submitButtonText }}
           </ElButton>
         </div>
       </template>
     </ElDrawer>
+
+    <ElDialog
+      v-model="appAuthorizationDialogVisible"
+      :title="activeAppAuthorizationAction"
+      width="640px"
+    >
+      <ElForm
+        :model="appAuthorizationForm"
+        label-position="right"
+        label-width="110px"
+      >
+        <ElFormItem label="授权应用">
+          <ElSelect
+            v-model="appAuthorizationForm.appId"
+            :disabled="activeAppAuthorizationAction === '续期授权'"
+            filterable
+            placeholder="请选择授权应用"
+          >
+            <ElOption
+              v-for="app in availableApplications"
+              :key="app.appId"
+              :label="`${app.appName} / ${app.price}`"
+              :value="app.appId"
+            />
+          </ElSelect>
+        </ElFormItem>
+        <ElFormItem label="授权时间">
+          <ElDatePicker
+            v-model="appAuthorizationForm.dateRange"
+            end-placeholder="到期时间"
+            range-separator="至"
+            start-placeholder="开始时间"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+          />
+        </ElFormItem>
+      </ElForm>
+
+      <template #footer>
+        <ElButton @click="appAuthorizationDialogVisible = false">
+          取消
+        </ElButton>
+        <ElButton type="primary" @click="saveAppAuthorization"> 保存 </ElButton>
+      </template>
+    </ElDialog>
+
+    <ElDialog v-model="paymentChannelVisible" title="新建通道" width="760px">
+      <ElForm
+        class="payment-channel-form"
+        :model="paymentChannelForm"
+        label-position="right"
+        label-width="110px"
+      >
+        <div class="payment-form-grid">
+          <ElFormItem label="支付配置">
+            <ElSelect v-model="paymentChannelForm.paymentConfig" filterable>
+              <ElOption label="拉卡拉支付(乐悠游)" value="拉卡拉支付(乐悠游)" />
+              <ElOption label="微信支付" value="微信支付" />
+              <ElOption label="支付宝" value="支付宝" />
+            </ElSelect>
+          </ElFormItem>
+          <ElFormItem label="支付名称">
+            <ElInput v-model="paymentChannelForm.paymentName" />
+          </ElFormItem>
+          <ElFormItem label="商户编号">
+            <ElInput v-model="paymentChannelForm.merchantNo" />
+          </ElFormItem>
+          <ElFormItem label="支付费率(%)">
+            <ElInput v-model="paymentChannelForm.paymentRate" />
+          </ElFormItem>
+          <ElFormItem label="商户appid">
+            <ElInput v-model="paymentChannelForm.merchantAppId" />
+          </ElFormItem>
+          <ElFormItem label="拉卡拉isv模式">
+            <ElInput v-model="paymentChannelForm.lklMode" />
+          </ElFormItem>
+          <ElFormItem class="payment-form-span" label="内部商户号">
+            <ElInput v-model="paymentChannelForm.internalMerchantNo" />
+          </ElFormItem>
+          <ElFormItem label="收单终端号">
+            <ElInput v-model="paymentChannelForm.cashierTerminalNo" />
+          </ElFormItem>
+          <ElFormItem label="B2B终端号">
+            <ElInput v-model="paymentChannelForm.b2bTerminalNo" />
+          </ElFormItem>
+          <ElFormItem label="公众号Appid">
+            <ElInput v-model="paymentChannelForm.officialAccountAppId" />
+          </ElFormItem>
+          <ElFormItem label="公众号SECRET">
+            <ElInput
+              v-model="paymentChannelForm.officialAccountSecret"
+              placeholder="公众号SECRET"
+            />
+          </ElFormItem>
+          <ElFormItem label="小程序Appid">
+            <ElInput v-model="paymentChannelForm.miniProgramAppId" />
+          </ElFormItem>
+          <ElFormItem label="小程序SECRET">
+            <ElInput v-model="paymentChannelForm.miniProgramSecret" />
+          </ElFormItem>
+          <ElFormItem label="启用状态">
+            <ElSwitch v-model="paymentChannelForm.enabled" />
+          </ElFormItem>
+          <ElFormItem label="默认支付">
+            <ElSwitch v-model="paymentChannelForm.defaultPayment" />
+          </ElFormItem>
+        </div>
+      </ElForm>
+
+      <template #footer>
+        <ElButton @click="paymentChannelVisible = false">取消</ElButton>
+        <ElButton type="primary" @click="savePaymentChannel">提交</ElButton>
+      </template>
+    </ElDialog>
+
+    <ElDialog v-model="paymentFeeVisible" title="设置费率" width="840px">
+      <ElForm
+        class="payment-fee-form"
+        :model="paymentFeeForm"
+        label-position="right"
+        label-width="150px"
+      >
+        <div class="payment-form-grid">
+          <ElFormItem label="借记卡手续费上限" required>
+            <ElInput v-model="paymentFeeForm.debitCardLimit">
+              <template #append>元</template>
+            </ElInput>
+          </ElFormItem>
+          <ElFormItem label="银联二维码借记卡上限" required>
+            <ElInput v-model="paymentFeeForm.unionQrDebitLimit">
+              <template #append>元</template>
+            </ElInput>
+          </ElFormItem>
+          <ElFormItem label="借记卡手续费率" required>
+            <ElInput
+              v-model="paymentFeeForm.debitCardRate"
+              placeholder="借记卡手续费率"
+            >
+              <template #append>%</template>
+            </ElInput>
+          </ElFormItem>
+          <ElFormItem label="贷记卡手续费率" required>
+            <ElInput
+              v-model="paymentFeeForm.creditCardRate"
+              placeholder="贷记卡手续费率"
+            >
+              <template #append>%</template>
+            </ElInput>
+          </ElFormItem>
+          <ElFormItem label="微信费率" required>
+            <ElInput v-model="paymentFeeForm.wechatRate" placeholder="微信费率">
+              <template #append>%</template>
+            </ElInput>
+          </ElFormItem>
+          <ElFormItem label="支付宝费率" required>
+            <ElInput
+              v-model="paymentFeeForm.alipayRate"
+              placeholder="支付宝费率"
+            >
+              <template #append>%</template>
+            </ElInput>
+          </ElFormItem>
+          <ElFormItem label="银联二维码借记费率" required>
+            <ElInput
+              v-model="paymentFeeForm.unionQrDebitRate"
+              placeholder="银联二维码借记费率"
+            >
+              <template #append>%</template>
+            </ElInput>
+          </ElFormItem>
+          <ElFormItem label="银联二维码贷记费率" required>
+            <ElInput
+              v-model="paymentFeeForm.unionQrCreditRate"
+              placeholder="银联二维码贷记费率"
+            >
+              <template #append>%</template>
+            </ElInput>
+          </ElFormItem>
+          <ElFormItem label="提现手续费" required>
+            <ElInput
+              v-model="paymentFeeForm.withdrawFee"
+              placeholder="提现手续费"
+            >
+              <template #append>元</template>
+            </ElInput>
+          </ElFormItem>
+        </div>
+      </ElForm>
+
+      <template #footer>
+        <ElButton @click="paymentFeeVisible = false">取消</ElButton>
+        <ElButton type="primary" @click="savePaymentFee">提交</ElButton>
+      </template>
+    </ElDialog>
 
     <ElDialog
       v-model="detailExplanationVisible"
@@ -1722,10 +2302,6 @@ function createExplanations(): PageExplanations {
   border-radius: 8px;
   background: var(--el-fill-color-lighter);
   padding: 16px;
-}
-
-.maintenance-tabs :deep(.el-tabs__content) {
-  padding-top: 4px;
 }
 
 .maintenance-version-select {

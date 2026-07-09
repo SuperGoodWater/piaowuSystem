@@ -137,6 +137,11 @@ const deviceBrandOptions = [
   { label: '智票硬件', value: '智票硬件' },
 ] as const;
 
+const enabledDisabledOptions = [
+  { label: '启用', value: '启用' },
+  { label: '禁用', value: '禁用' },
+] as const;
+
 const sampleStoreOptions = [
   { label: '欢乐谷东区店', value: '欢乐谷东区店' },
   { label: '欢乐谷西区店', value: '欢乐谷西区店' },
@@ -162,7 +167,17 @@ type PageExplanations = Pick<
 
 type InteractionItem = SaaSActionItem;
 type FormFieldItem = SaaSFieldItem;
+type BrandStatus = '启用' | '禁用';
 type DeviceBindingStatus = '已绑定' | '未绑定';
+
+interface BrandRecord {
+  brandCode: string;
+  brandName: string;
+  deviceCount: string;
+  id: string;
+  status: BrandStatus;
+  updatedAt: string;
+}
 
 interface DeviceRecord {
   bindingStatus: DeviceBindingStatus;
@@ -190,7 +205,32 @@ const filterState = ref({
   storeName: '',
 });
 const pageSize = ref(10);
+const brandDialogVisible = ref(false);
+const brandForm = ref({
+  brandCode: '',
+  brandName: '',
+  status: '启用' as BrandStatus,
+});
+const editingBrandId = ref('');
 const selectedDeviceId = ref('');
+const brandData = ref<BrandRecord[]>([
+  {
+    brandCode: 'PX',
+    brandName: '票星终端',
+    deviceCount: '48',
+    id: 'brand-001',
+    status: '启用',
+    updatedAt: '2026-07-05 15:10',
+  },
+  {
+    brandCode: 'ZP',
+    brandName: '智票硬件',
+    deviceCount: '21',
+    id: 'brand-002',
+    status: '禁用',
+    updatedAt: '2026-07-04 18:20',
+  },
+]);
 const deviceData = ref<DeviceRecord[]>(
   interactions.sampleData.map((item) => normalizeDeviceRecord(item)),
 );
@@ -361,7 +401,10 @@ function buildFieldSchema(
         component: 'Select',
         componentProps: {
           filterable: true,
-          options: field.options ?? [],
+          options:
+            field.field === 'brand'
+              ? getDeviceBrandOptions()
+              : (field.options ?? []),
           placeholder,
         },
         defaultValue: getFieldDefaultValue(field),
@@ -414,6 +457,15 @@ function buildDefaultValues(fields: readonly FormFieldItem[] = []) {
       getFieldDefaultValue(field),
     ]),
   );
+}
+
+function getDeviceBrandOptions() {
+  return brandData.value
+    .filter((item) => item.status === '启用')
+    .map((item) => ({
+      label: item.brandName,
+      value: item.brandName,
+    }));
 }
 
 function buildInteractionSchema(interaction?: InteractionItem) {
@@ -476,6 +528,21 @@ function getStatusTagType(status: DeviceBindingStatus) {
   return status === '已绑定' ? 'success' : 'info';
 }
 
+function getBrandStatusTagType(status: BrandStatus) {
+  return status === '启用' ? 'success' : 'info';
+}
+
+function getBrandRow(row: Record<string, any>): BrandRecord {
+  return {
+    brandCode: row.brandCode ?? '',
+    brandName: row.brandName ?? '',
+    deviceCount: row.deviceCount ?? '0',
+    id: row.id ?? '',
+    status: (row.status as BrandStatus) ?? '启用',
+    updatedAt: row.updatedAt ?? '',
+  };
+}
+
 function updateDeviceRecord(id: string, patch: Partial<DeviceRecord>) {
   deviceData.value = deviceData.value.map((item) =>
     item.id === id
@@ -490,6 +557,99 @@ function updateDeviceRecord(id: string, patch: Partial<DeviceRecord>) {
 
 function closeDetailDrawer() {
   detailVisible.value = false;
+}
+
+function resetBrandForm() {
+  brandForm.value = {
+    brandCode: '',
+    brandName: '',
+    status: '启用',
+  };
+  editingBrandId.value = '';
+}
+
+function openBrandDialog() {
+  resetBrandForm();
+  brandDialogVisible.value = true;
+}
+
+function editBrand(row: Record<string, any>) {
+  const brand = getBrandRow(row);
+  editingBrandId.value = brand.id;
+  brandForm.value = {
+    brandCode: brand.brandCode,
+    brandName: brand.brandName,
+    status: brand.status,
+  };
+}
+
+function saveBrand() {
+  const brandName = brandForm.value.brandName.trim();
+  const brandCode = brandForm.value.brandCode.trim();
+  const status = brandForm.value.status;
+
+  if (!brandName || !brandCode || !status) {
+    ElMessage.warning('请先完善品牌信息');
+    return;
+  }
+
+  const duplicated = brandData.value.some(
+    (item) =>
+      item.id !== editingBrandId.value &&
+      (item.brandName === brandName || item.brandCode === brandCode),
+  );
+
+  if (duplicated) {
+    ElMessage.warning('品牌名称或品牌编码已存在，请重新填写');
+    return;
+  }
+
+  if (editingBrandId.value) {
+    brandData.value = brandData.value.map((item) =>
+      item.id === editingBrandId.value
+        ? {
+            ...item,
+            brandCode,
+            brandName,
+            status,
+            updatedAt: getCurrentDateTime(),
+          }
+        : item,
+    );
+    ElMessage.success(`已更新品牌：${brandName}`);
+  } else {
+    brandData.value.unshift({
+      brandCode,
+      brandName,
+      deviceCount: '0',
+      id: `brand-${Date.now()}`,
+      status,
+      updatedAt: getCurrentDateTime(),
+    });
+    ElMessage.success(`已新增品牌：${brandName}`);
+  }
+
+  resetBrandForm();
+}
+
+function disableBrand(row: Record<string, any>) {
+  const brand = getBrandRow(row);
+
+  if (brand.status === '禁用') {
+    ElMessage.info('当前品牌已禁用');
+    return;
+  }
+
+  brandData.value = brandData.value.map((item) =>
+    item.id === brand.id
+      ? {
+          ...item,
+          status: '禁用',
+          updatedAt: getCurrentDateTime(),
+        }
+      : item,
+  );
+  ElMessage.success(`已禁用品牌：${brand.brandName}`);
 }
 
 function openAction(action: InteractionItem) {
@@ -925,6 +1085,9 @@ function createExplanations(): PageExplanations {
               >
                 {{ action.label }}
               </ElButton>
+              <ElButton type="primary" plain @click="openBrandDialog">
+                设备品牌
+              </ElButton>
               <ElButton type="primary" native-type="submit">查询</ElButton>
               <ElButton @click="handleFilterReset">重置</ElButton>
             </div>
@@ -987,6 +1150,94 @@ function createExplanations(): PageExplanations {
         </div>
       </div>
     </div>
+
+    <ElDialog v-model="brandDialogVisible" title="设备品牌" width="820px">
+      <div class="flex flex-col gap-4">
+        <ElForm :model="brandForm" label-position="right" label-width="90px">
+          <div class="brand-form-grid">
+            <ElFormItem label="品牌名称">
+              <ElInput
+                v-model="brandForm.brandName"
+                placeholder="请输入品牌名称"
+              />
+            </ElFormItem>
+            <ElFormItem label="品牌编码">
+              <ElInput
+                v-model="brandForm.brandCode"
+                placeholder="请输入品牌编码"
+              />
+            </ElFormItem>
+            <ElFormItem label="状态">
+              <ElSelect v-model="brandForm.status" placeholder="请选择状态">
+                <ElOption
+                  v-for="option in enabledDisabledOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </ElSelect>
+            </ElFormItem>
+            <div class="brand-form-actions">
+              <ElButton type="primary" @click="saveBrand">
+                {{ editingBrandId ? '保存品牌' : '新增品牌' }}
+              </ElButton>
+              <ElButton @click="resetBrandForm">重置</ElButton>
+            </div>
+          </div>
+        </ElForm>
+
+        <ElTable :data="brandData" max-height="360" size="small" stripe>
+          <ElTable.TableColumn
+            label="品牌名称"
+            prop="brandName"
+            min-width="150"
+          />
+          <ElTable.TableColumn
+            label="品牌编码"
+            prop="brandCode"
+            min-width="120"
+          />
+          <ElTable.TableColumn
+            label="设备数量"
+            prop="deviceCount"
+            min-width="100"
+          />
+          <ElTable.TableColumn label="状态" min-width="100">
+            <template #default="{ row }">
+              <ElTag :type="getBrandStatusTagType(getBrandRow(row).status)">
+                {{ getBrandRow(row).status }}
+              </ElTag>
+            </template>
+          </ElTable.TableColumn>
+          <ElTable.TableColumn
+            label="更新时间"
+            prop="updatedAt"
+            min-width="150"
+          />
+          <ElTable.TableColumn label="操作" fixed="right" min-width="120">
+            <template #default="{ row }">
+              <ElSpace wrap>
+                <ElButton link type="primary" @click="editBrand(row)">
+                  编辑
+                </ElButton>
+                <ElButton
+                  link
+                  type="danger"
+                  :disabled="getBrandRow(row).status === '禁用'"
+                  @click="disableBrand(row)"
+                >
+                  禁用
+                </ElButton>
+              </ElSpace>
+            </template>
+          </ElTable.TableColumn>
+        </ElTable>
+      </div>
+
+      <template #footer>
+        <ElButton @click="brandDialogVisible = false">关闭</ElButton>
+      </template>
+    </ElDialog>
 
     <ElDialog
       v-model="explanationVisible"
@@ -1369,10 +1620,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }
@@ -1399,8 +1649,39 @@ function createExplanations(): PageExplanations {
   margin-left: 0;
 }
 
+.brand-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
+  gap: 12px 16px;
+  align-items: end;
+}
+
+.brand-form-grid :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.brand-form-grid :deep(.el-input),
+.brand-form-grid :deep(.el-select) {
+  width: 100%;
+}
+
+.brand-form-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 1px;
+}
+
+.brand-form-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
 @media (max-width: 768px) {
   .saas-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-form-grid {
     grid-template-columns: 1fr;
   }
 }
