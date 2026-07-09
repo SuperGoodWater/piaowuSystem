@@ -68,6 +68,18 @@ const routes: RouteRecordRaw[] = [
           },
           {
             component: () =>
+              import('#/views/saas/product-management/resource-management.vue'),
+            meta: {
+              description: '维护按量付费资源和麦点资源包',
+              icon: 'lucide:coins',
+              priority: 'P1',
+              title: '资源管理',
+            },
+            name: 'SaaSResourceManagement',
+            path: 'resource-management',
+          },
+          {
+            component: () =>
               import('#/views/saas/product-management/store-version-management.vue'),
             meta: {
               description: '管理不同门店类型下的版本',

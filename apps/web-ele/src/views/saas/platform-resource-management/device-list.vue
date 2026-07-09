@@ -17,6 +17,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -205,7 +206,7 @@ const filterState = ref({
   storeName: '',
 });
 const pageSize = ref(10);
-const brandDialogVisible = ref(false);
+const brandDrawerVisible = ref(false);
 const brandForm = ref({
   brandCode: '',
   brandName: '',
@@ -568,9 +569,9 @@ function resetBrandForm() {
   editingBrandId.value = '';
 }
 
-function openBrandDialog() {
+function openBrandDrawer() {
   resetBrandForm();
-  brandDialogVisible.value = true;
+  brandDrawerVisible.value = true;
 }
 
 function editBrand(row: Record<string, any>) {
@@ -632,11 +633,24 @@ function saveBrand() {
   resetBrandForm();
 }
 
-function disableBrand(row: Record<string, any>) {
+async function toggleBrandStatus(row: Record<string, any>) {
   const brand = getBrandRow(row);
+  const nextStatus: BrandStatus = brand.status === '启用' ? '禁用' : '启用';
 
-  if (brand.status === '禁用') {
-    ElMessage.info('当前品牌已禁用');
+  try {
+    await ElMessageBox.confirm(
+      nextStatus === '禁用'
+        ? '禁用后，新的设备不应继续选择该品牌。'
+        : '启用后，新的设备可以继续选择该品牌。',
+      `${nextStatus}品牌`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${nextStatus}`,
+        type: nextStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
     return;
   }
 
@@ -644,12 +658,12 @@ function disableBrand(row: Record<string, any>) {
     item.id === brand.id
       ? {
           ...item,
-          status: '禁用',
+          status: nextStatus,
           updatedAt: getCurrentDateTime(),
         }
       : item,
   );
-  ElMessage.success(`已禁用品牌：${brand.brandName}`);
+  ElMessage.success(`已${nextStatus}品牌：${brand.brandName}`);
 }
 
 function openAction(action: InteractionItem) {
@@ -1085,7 +1099,7 @@ function createExplanations(): PageExplanations {
               >
                 {{ action.label }}
               </ElButton>
-              <ElButton type="primary" plain @click="openBrandDialog">
+              <ElButton type="primary" plain @click="openBrandDrawer">
                 设备品牌
               </ElButton>
               <ElButton type="primary" native-type="submit">查询</ElButton>
@@ -1151,7 +1165,7 @@ function createExplanations(): PageExplanations {
       </div>
     </div>
 
-    <ElDialog v-model="brandDialogVisible" title="设备品牌" width="820px">
+    <ElDrawer v-model="brandDrawerVisible" size="640px" title="设备品牌">
       <div class="flex flex-col gap-4">
         <ElForm :model="brandForm" label-position="right" label-width="90px">
           <div class="brand-form-grid">
@@ -1222,11 +1236,12 @@ function createExplanations(): PageExplanations {
                 </ElButton>
                 <ElButton
                   link
-                  type="danger"
-                  :disabled="getBrandRow(row).status === '禁用'"
-                  @click="disableBrand(row)"
+                  :type="
+                    getBrandRow(row).status === '启用' ? 'danger' : 'success'
+                  "
+                  @click="toggleBrandStatus(row)"
                 >
-                  禁用
+                  {{ getBrandRow(row).status === '启用' ? '禁用' : '启用' }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1235,9 +1250,9 @@ function createExplanations(): PageExplanations {
       </div>
 
       <template #footer>
-        <ElButton @click="brandDialogVisible = false">关闭</ElButton>
+        <ElButton @click="brandDrawerVisible = false">关闭</ElButton>
       </template>
-    </ElDialog>
+    </ElDrawer>
 
     <ElDialog
       v-model="explanationVisible"
@@ -1651,7 +1666,7 @@ function createExplanations(): PageExplanations {
 
 .brand-form-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
   gap: 12px 16px;
   align-items: end;
 }
@@ -1669,6 +1684,7 @@ function createExplanations(): PageExplanations {
   display: flex;
   gap: 12px;
   align-items: center;
+  grid-column: 1 / -1;
   padding-bottom: 1px;
 }
 

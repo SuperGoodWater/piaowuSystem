@@ -17,6 +17,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -510,12 +511,19 @@ function openAction(action: InteractionItem) {
   applyInteractionForm(action);
 }
 
-function handleRowAction(action: InteractionItem, row: Record<string, any>) {
+async function handleRowAction(
+  action: InteractionItem,
+  row: Record<string, any>,
+) {
   const currentRow = getAnnouncementRow(row);
   activeAction.value = action.label;
   selectedAnnouncementId.value = currentRow.id;
-  detailVisible.value = true;
   applyInteractionForm(action);
+
+  if (['停用', '启用'].includes(action.label)) {
+    await confirmAnnouncementToggle(action.label);
+    return;
+  }
 
   if (action.label === '编辑') {
     populateInteractionForm({
@@ -525,6 +533,37 @@ function handleRowAction(action: InteractionItem, row: Record<string, any>) {
       title: currentRow.title,
     });
   }
+
+  detailVisible.value = true;
+}
+
+async function confirmAnnouncementToggle(actionLabel: string) {
+  if (!selectedAnnouncement.value) {
+    ElMessage.warning('未找到当前公告，请重新选择');
+    return;
+  }
+
+  const nextStatus: AnnouncementStatus =
+    actionLabel === '启用' ? '启用' : '停用';
+
+  try {
+    await ElMessageBox.confirm(
+      nextStatus === '启用'
+        ? '启用后，该公告将恢复顶部展示。'
+        : '停用后，该公告不再展示在顶部。',
+      `${nextStatus}公告`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${nextStatus}`,
+        type: nextStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
+    return;
+  }
+
+  await toggleAnnouncement();
 }
 
 function handleFilterSubmit() {
@@ -839,11 +878,11 @@ function createExplanations(): PageExplanations {
       { label: '状态', note: '控制公告当前是否展示', required: true },
     ],
     pageGoal: '维护顶部公告内容和展示状态，确保关键通知准确触达平台用户。',
-    permissionPoints: ['新建', '编辑', '发布', '下线'],
+    permissionPoints: ['新建', '编辑', '启用', '停用'],
     processSteps: [
       '通过公告标题、通知对象或状态筛选公告。',
       '从列表进入新建、编辑、启用或停用动作。',
-      '在抽屉中完成公告信息填写或状态切换确认。',
+      '新建和编辑在抽屉中完成，启用/停用使用居中确认弹窗。',
       '提交后即时刷新公告状态和发布时间。',
     ],
     statusTransitions: [

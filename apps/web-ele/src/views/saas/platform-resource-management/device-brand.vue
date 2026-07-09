@@ -17,6 +17,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -596,26 +597,6 @@ async function updateBrand(values: Record<string, any>) {
   closeDetailDrawer();
 }
 
-async function disableBrand() {
-  if (!selectedBrand.value) {
-    ElMessage.warning('未找到当前品牌，请重新选择');
-    closeDetailDrawer();
-    return;
-  }
-
-  if (selectedBrand.value.status === '禁用') {
-    ElMessage.warning('当前品牌已禁用，无需重复操作');
-    closeDetailDrawer();
-    return;
-  }
-
-  updateBrandRecord(selectedBrand.value.id, {
-    status: '禁用',
-  });
-  ElMessage.success(`已禁用品牌：${selectedBrand.value.brandName}`);
-  closeDetailDrawer();
-}
-
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
     await createBrand(values);
@@ -628,12 +609,48 @@ async function handleDetailSubmit(values: Record<string, any>) {
 }
 
 async function submitActiveAction() {
-  if (isDisableMode.value) {
-    await disableBrand();
+  await detailActionFormApi.validateAndSubmitForm();
+}
+
+function getBrandStatusAction(row: BrandRecord) {
+  return row.status === '启用'
+    ? {
+        label: '禁用',
+        nextStatus: '禁用' as BrandStatus,
+        type: 'danger' as const,
+      }
+    : {
+        label: '启用',
+        nextStatus: '启用' as BrandStatus,
+        type: 'success' as const,
+      };
+}
+
+async function toggleBrandStatus(row: Record<string, any>) {
+  const currentRow = getBrandRow(row);
+  const action = getBrandStatusAction(currentRow);
+
+  try {
+    await ElMessageBox.confirm(
+      action.nextStatus === '禁用'
+        ? '禁用后，新的设备不应继续选择该品牌。'
+        : '启用后，新的设备可以继续选择该品牌。',
+      `${action.label}品牌`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${action.label}`,
+        type: action.nextStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
     return;
   }
 
-  await detailActionFormApi.validateAndSubmitForm();
+  updateBrandRecord(currentRow.id, {
+    status: action.nextStatus,
+  });
+  ElMessage.success(`已${action.label}品牌：${currentRow.brandName}`);
 }
 
 function handlePageSizeChange(size: number) {
@@ -759,7 +776,7 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理设备品牌基础档案，覆盖品牌新增、编辑和禁用等核心品牌管理动作。',
+      '管理设备品牌基础档案，覆盖品牌新增、编辑、禁用和启用等核心品牌管理动作。',
     documentNotes: [
       '品牌名称和品牌编码在平台内都应保持唯一。',
       '禁用品牌后，新的设备不应继续引用该品牌。',
@@ -768,7 +785,7 @@ function createExplanations(): PageExplanations {
     exceptions: [
       '品牌名称、品牌编码或状态为空时不允许保存。',
       '品牌名称或品牌编码重复时不允许创建或编辑。',
-      '已禁用品牌不允许重复执行禁用动作。',
+      '品牌启用和禁用动作互斥展示。',
     ],
     fields: [
       { label: '品牌名称', note: '品牌显示名称', required: true },
@@ -777,11 +794,11 @@ function createExplanations(): PageExplanations {
       { label: '设备数量', note: '当前品牌下已登记设备数量' },
     ],
     pageGoal: '维护设备品牌档案，确保品牌编码、状态与设备引用关系准确。',
-    permissionPoints: ['新建', '编辑', '禁用'],
+    permissionPoints: ['新建', '编辑', '禁用', '启用'],
     processSteps: [
       '通过品牌名称、品牌编码或状态筛选品牌。',
-      '从列表进入新增、编辑或禁用动作。',
-      '在抽屉中完成品牌信息填写或状态确认。',
+      '从列表进入新增、编辑，或通过居中弹窗确认启用/禁用。',
+      '新增和编辑在抽屉中完成，启用/禁用使用居中确认弹窗。',
       '提交后即时刷新品牌状态和更新时间。',
     ],
     statusTransitions: [
@@ -793,9 +810,9 @@ function createExplanations(): PageExplanations {
       },
       {
         current: '禁用',
-        note: '当前页面暂未提供恢复启用动作。',
-        target: '禁用',
-        trigger: '编辑',
+        note: '启用后新的设备可以继续选择该品牌。',
+        target: '启用',
+        trigger: '启用',
       },
     ],
   };
@@ -897,17 +914,22 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
-                  v-for="action in interactions.rowActions"
+                  v-for="action in interactions.rowActions.filter(
+                    (item) => item.label !== '禁用',
+                  )"
                   :key="action.label"
                   link
-                  :disabled="
-                    action.label === '禁用' &&
-                    getBrandRow(row).status === '禁用'
-                  "
                   :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
                   {{ action.label }}
+                </ElButton>
+                <ElButton
+                  link
+                  :type="getBrandStatusAction(getBrandRow(row)).type"
+                  @click="toggleBrandStatus(row)"
+                >
+                  {{ getBrandStatusAction(getBrandRow(row)).label }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1309,10 +1331,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }

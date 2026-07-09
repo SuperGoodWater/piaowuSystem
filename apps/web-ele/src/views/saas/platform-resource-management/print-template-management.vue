@@ -17,6 +17,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -631,26 +632,6 @@ async function updateTemplate(values: Record<string, any>) {
   closeDetailDrawer();
 }
 
-async function disableTemplate() {
-  if (!selectedTemplate.value) {
-    ElMessage.warning('未找到当前模板，请重新选择');
-    closeDetailDrawer();
-    return;
-  }
-
-  if (selectedTemplate.value.status === '停用') {
-    ElMessage.warning('当前模板已停用，无需重复操作');
-    closeDetailDrawer();
-    return;
-  }
-
-  updateTemplateRecord(selectedTemplate.value.id, {
-    status: '停用',
-  });
-  ElMessage.success(`已停用模板：${selectedTemplate.value.templateName}`);
-  closeDetailDrawer();
-}
-
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
     await createTemplate(values);
@@ -663,12 +644,48 @@ async function handleDetailSubmit(values: Record<string, any>) {
 }
 
 async function submitActiveAction() {
-  if (isDisableMode.value) {
-    await disableTemplate();
+  await detailActionFormApi.validateAndSubmitForm();
+}
+
+function getTemplateStatusAction(row: TemplateRecord) {
+  return row.status === '启用'
+    ? {
+        label: '停用',
+        nextStatus: '停用' as TemplateStatus,
+        type: 'danger' as const,
+      }
+    : {
+        label: '启用',
+        nextStatus: '启用' as TemplateStatus,
+        type: 'success' as const,
+      };
+}
+
+async function toggleTemplateStatus(row: Record<string, any>) {
+  const currentRow = getTemplateRow(row);
+  const action = getTemplateStatusAction(currentRow);
+
+  try {
+    await ElMessageBox.confirm(
+      action.nextStatus === '停用'
+        ? '停用后，门店不应继续选择该打印模板。'
+        : '启用后，门店可以继续选择该打印模板。',
+      `${action.label}模板`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${action.label}`,
+        type: action.nextStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
     return;
   }
 
-  await detailActionFormApi.validateAndSubmitForm();
+  updateTemplateRecord(currentRow.id, {
+    status: action.nextStatus,
+  });
+  ElMessage.success(`已${action.label}模板：${currentRow.templateName}`);
 }
 
 function handlePageSizeChange(size: number) {
@@ -798,7 +815,7 @@ function createInteractions(): PageInteractions {
         type: 'danger',
         description: '停用当前模板。',
         goal: '关闭模板继续被配置使用。',
-        permissionPoints: ['停用'],
+        permissionPoints: ['停用', '启用'],
       },
     ],
     sampleData: [
@@ -828,7 +845,7 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理打印模板配置，覆盖模板新建、编辑、预览和停用等核心动作，确保模板适用范围清晰。',
+      '管理打印模板配置，覆盖模板新建、编辑、预览、停用和启用等核心动作，确保模板适用范围清晰。',
     documentNotes: [
       '同一模板类型下不允许创建同名模板。',
       '模板预览用于快速确认输出内容摘要，不等同于真实打印渲染。',
@@ -837,7 +854,7 @@ function createExplanations(): PageExplanations {
     exceptions: [
       '模板名称、模板类型、适用范围或状态为空时不允许保存。',
       '同类型下模板名称重复时不允许创建或编辑。',
-      '已停用模板不允许重复执行停用动作。',
+      '模板启用和停用动作互斥展示。',
     ],
     fields: [
       { label: '模板名称', note: '打印模板显示名称', required: true },
@@ -847,11 +864,11 @@ function createExplanations(): PageExplanations {
       { label: '模板预览文案', note: '用于页面快速查看模板内容摘要' },
     ],
     pageGoal: '维护打印模板配置和适用范围，确保模板可预览、可管理、可追踪。',
-    permissionPoints: ['新建', '编辑', '查看', '停用'],
+    permissionPoints: ['新建', '编辑', '查看', '停用', '启用'],
     processSteps: [
       '通过模板名称、类型或状态筛选模板。',
-      '从列表进入新建、编辑、预览或停用动作。',
-      '在抽屉中完成模板信息填写或停用确认。',
+      '从列表进入新建、编辑、预览，或通过居中弹窗确认启用/停用。',
+      '新建、编辑和预览在抽屉中完成，启用/停用使用居中确认弹窗。',
       '提交后即时刷新模板状态和更新时间。',
     ],
     statusTransitions: [
@@ -863,9 +880,9 @@ function createExplanations(): PageExplanations {
       },
       {
         current: '停用',
-        note: '当前页面暂未提供重新启用动作。',
-        target: '停用',
-        trigger: '预览',
+        note: '启用后门店可以继续选择该模板。',
+        target: '启用',
+        trigger: '启用',
       },
     ],
   };
@@ -975,17 +992,22 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
-                  v-for="action in interactions.rowActions"
+                  v-for="action in interactions.rowActions.filter(
+                    (item) => item.label !== '停用',
+                  )"
                   :key="action.label"
                   link
-                  :disabled="
-                    action.label === '停用' &&
-                    getTemplateRow(row).status === '停用'
-                  "
                   :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
                   {{ action.label }}
+                </ElButton>
+                <ElButton
+                  link
+                  :type="getTemplateStatusAction(getTemplateRow(row)).type"
+                  @click="toggleTemplateStatus(row)"
+                >
+                  {{ getTemplateStatusAction(getTemplateRow(row)).label }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1387,10 +1409,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }

@@ -19,6 +19,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -742,9 +743,26 @@ function getToggleStatusAction(row: VersionRecord) {
       };
 }
 
-function toggleVersionStatus(row: Record<string, any>) {
+async function toggleVersionStatus(row: Record<string, any>) {
   const currentRow = getVersionRow(row);
   const action = getToggleStatusAction(currentRow);
+
+  try {
+    await ElMessageBox.confirm(
+      action.nextStatus === '停用'
+        ? '停用后，新的门店配置不可再选择该版本。'
+        : '启用后，新的门店配置可以继续选择该版本。',
+      `${action.label}版本`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${action.label}`,
+        type: action.nextStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
+    return;
+  }
 
   updateVersionRecord(currentRow.id, {
     status: action.nextStatus,

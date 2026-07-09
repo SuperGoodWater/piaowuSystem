@@ -17,6 +17,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -681,26 +682,6 @@ async function updatePermission(values: Record<string, any>) {
   closeDetailDrawer();
 }
 
-async function disableEmployee() {
-  if (!selectedEmployee.value) {
-    ElMessage.warning('未找到当前员工，请重新选择');
-    closeDetailDrawer();
-    return;
-  }
-
-  if (selectedEmployee.value.status === '禁用') {
-    ElMessage.warning('当前员工已禁用，无需重复操作');
-    closeDetailDrawer();
-    return;
-  }
-
-  updateEmployeeRecord(selectedEmployee.value.id, {
-    status: '禁用',
-  });
-  ElMessage.success(`已禁用员工：${selectedEmployee.value.name}`);
-  closeDetailDrawer();
-}
-
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
     await createEmployee(values);
@@ -718,12 +699,48 @@ async function handleDetailSubmit(values: Record<string, any>) {
 }
 
 async function submitActiveAction() {
-  if (isDisableMode.value) {
-    await disableEmployee();
+  await detailActionFormApi.validateAndSubmitForm();
+}
+
+function getEmployeeStatusAction(row: EmployeeRecord) {
+  return row.status === '启用'
+    ? {
+        label: '禁用',
+        nextStatus: '禁用' as EmployeeStatus,
+        type: 'danger' as const,
+      }
+    : {
+        label: '启用',
+        nextStatus: '启用' as EmployeeStatus,
+        type: 'success' as const,
+      };
+}
+
+async function toggleEmployeeStatus(row: Record<string, any>) {
+  const currentRow = getEmployeeRow(row);
+  const action = getEmployeeStatusAction(currentRow);
+
+  try {
+    await ElMessageBox.confirm(
+      action.nextStatus === '禁用'
+        ? '禁用后，该员工账号不可继续访问后台。'
+        : '启用后，该员工账号可以重新访问后台。',
+      `${action.label}员工`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${action.label}`,
+        type: action.nextStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
     return;
   }
 
-  await detailActionFormApi.validateAndSubmitForm();
+  updateEmployeeRecord(currentRow.id, {
+    status: action.nextStatus,
+  });
+  ElMessage.success(`已${action.label}员工：${currentRow.name}`);
 }
 
 function handlePageSizeChange(size: number) {
@@ -914,7 +931,7 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理 SaaS 内部员工账号，覆盖新建、编辑、权限配置和禁用等核心员工管理动作。',
+      '管理 SaaS 内部员工账号，覆盖新建、编辑、权限配置、禁用和启用等核心员工管理动作。',
     documentNotes: [
       '登录账号在系统内必须唯一，不允许重复。',
       '员工角色决定默认权限边界，权限配置可在此基础上细化。',
@@ -923,7 +940,7 @@ function createExplanations(): PageExplanations {
     exceptions: [
       '登录账号重复时不能创建或保存。',
       '未选择部门或角色时不允许提交。',
-      '已禁用员工不允许重复执行禁用动作。',
+      '员工启用和禁用动作互斥展示。',
     ],
     fields: [
       { label: '员工姓名', note: '员工显示名称', required: true },
@@ -933,11 +950,11 @@ function createExplanations(): PageExplanations {
       { label: '状态', note: '标记账号当前是否可用' },
     ],
     pageGoal: '维护内部员工账号及其权限范围，确保员工账号状态和组织归属准确。',
-    permissionPoints: ['新建', '编辑', '权限配置', '禁用'],
+    permissionPoints: ['新建', '编辑', '权限配置', '禁用', '启用'],
     processSteps: [
       '通过员工姓名、登录账号、部门或状态筛选员工。',
-      '从列表进入新建、编辑、权限配置或禁用动作。',
-      '在抽屉中完成信息填写或状态确认。',
+      '从列表进入新建、编辑、权限配置，或通过居中弹窗确认启用/禁用。',
+      '新增、编辑和权限配置在抽屉中完成，启用/禁用使用居中确认弹窗。',
       '提交后即时刷新员工状态、角色和权限范围。',
     ],
     statusTransitions: [
@@ -949,9 +966,9 @@ function createExplanations(): PageExplanations {
       },
       {
         current: '禁用',
-        note: '当前页面暂未提供恢复启用动作。',
-        target: '禁用',
-        trigger: '编辑',
+        note: '启用后员工账号恢复后台访问。',
+        target: '启用',
+        trigger: '启用',
       },
     ],
   };
@@ -1069,17 +1086,22 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
-                  v-for="action in interactions.rowActions"
+                  v-for="action in interactions.rowActions.filter(
+                    (item) => item.label !== '禁用',
+                  )"
                   :key="action.label"
                   link
-                  :disabled="
-                    action.label === '禁用' &&
-                    getEmployeeRow(row).status === '禁用'
-                  "
                   :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
                   {{ action.label }}
+                </ElButton>
+                <ElButton
+                  link
+                  :type="getEmployeeStatusAction(getEmployeeRow(row)).type"
+                  @click="toggleEmployeeStatus(row)"
+                >
+                  {{ getEmployeeStatusAction(getEmployeeRow(row)).label }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1484,10 +1506,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }

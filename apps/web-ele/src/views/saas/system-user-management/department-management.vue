@@ -17,6 +17,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -622,26 +623,6 @@ async function updateDepartment(values: Record<string, any>) {
   closeDetailDrawer();
 }
 
-async function disableDepartment() {
-  if (!selectedDepartment.value) {
-    ElMessage.warning('未找到当前部门，请重新选择');
-    closeDetailDrawer();
-    return;
-  }
-
-  if (selectedDepartment.value.status === '禁用') {
-    ElMessage.warning('当前部门已禁用，无需重复操作');
-    closeDetailDrawer();
-    return;
-  }
-
-  updateDepartmentRecord(selectedDepartment.value.id, {
-    status: '禁用',
-  });
-  ElMessage.success(`已禁用部门：${selectedDepartment.value.departmentName}`);
-  closeDetailDrawer();
-}
-
 async function handleDetailSubmit(values: Record<string, any>) {
   if (isCreateMode.value) {
     await createDepartment(values);
@@ -654,12 +635,48 @@ async function handleDetailSubmit(values: Record<string, any>) {
 }
 
 async function submitActiveAction() {
-  if (isDisableMode.value) {
-    await disableDepartment();
+  await detailActionFormApi.validateAndSubmitForm();
+}
+
+function getDepartmentStatusAction(row: DepartmentRecord) {
+  return row.status === '启用'
+    ? {
+        label: '禁用',
+        nextStatus: '禁用' as DepartmentStatus,
+        type: 'danger' as const,
+      }
+    : {
+        label: '启用',
+        nextStatus: '启用' as DepartmentStatus,
+        type: 'success' as const,
+      };
+}
+
+async function toggleDepartmentStatus(row: Record<string, any>) {
+  const currentRow = getDepartmentRow(row);
+  const action = getDepartmentStatusAction(currentRow);
+
+  try {
+    await ElMessageBox.confirm(
+      action.nextStatus === '禁用'
+        ? '禁用后，不再允许新员工继续选择该部门。'
+        : '启用后，新员工可以继续选择该部门。',
+      `${action.label}部门`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${action.label}`,
+        type: action.nextStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
     return;
   }
 
-  await detailActionFormApi.validateAndSubmitForm();
+  updateDepartmentRecord(currentRow.id, {
+    status: action.nextStatus,
+  });
+  ElMessage.success(`已${action.label}部门：${currentRow.departmentName}`);
 }
 
 function handlePageSizeChange(size: number) {
@@ -808,7 +825,7 @@ function createInteractions(): PageInteractions {
 function createExplanations(): PageExplanations {
   return {
     description:
-      '管理 SaaS 内部组织部门，覆盖新增、编辑、禁用等组织结构维护动作。',
+      '管理 SaaS 内部组织部门，覆盖新增、编辑、禁用和启用等组织结构维护动作。',
     documentNotes: [
       '部门名称在组织内应保持唯一，避免员工归属混淆。',
       '禁用部门后，不再允许新员工继续选择该部门。',
@@ -817,7 +834,7 @@ function createExplanations(): PageExplanations {
     exceptions: [
       '部门名称重复时不允许创建或保存。',
       '负责人为空时不允许提交。',
-      '已禁用部门不允许重复执行禁用动作。',
+      '部门启用和禁用动作互斥展示。',
     ],
     fields: [
       { label: '部门名称', note: '组织显示名称', required: true },
@@ -827,11 +844,11 @@ function createExplanations(): PageExplanations {
       { label: '员工数', note: '当前部门下员工数量' },
     ],
     pageGoal: '维护组织结构和部门归属信息，确保部门状态、负责人和层级准确。',
-    permissionPoints: ['新增', '编辑', '禁用'],
+    permissionPoints: ['新增', '编辑', '禁用', '启用'],
     processSteps: [
       '通过部门名称、负责人或状态筛选部门。',
-      '从列表进入新增、编辑或禁用动作。',
-      '在抽屉中完成组织信息填写或确认操作。',
+      '从列表进入新增、编辑，或通过居中弹窗确认启用/禁用。',
+      '新增和编辑在抽屉中完成，启用/禁用使用居中确认弹窗。',
       '提交后即时刷新部门状态和层级信息。',
     ],
     statusTransitions: [
@@ -843,9 +860,9 @@ function createExplanations(): PageExplanations {
       },
       {
         current: '禁用',
-        note: '当前页面暂未提供恢复启用动作。',
-        target: '禁用',
-        trigger: '编辑',
+        note: '启用后新员工可以继续选择该部门。',
+        target: '启用',
+        trigger: '启用',
       },
     ],
   };
@@ -947,17 +964,22 @@ function createExplanations(): PageExplanations {
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
-                  v-for="action in interactions.rowActions"
+                  v-for="action in interactions.rowActions.filter(
+                    (item) => item.label !== '禁用',
+                  )"
                   :key="action.label"
                   link
-                  :disabled="
-                    action.label === '禁用' &&
-                    getDepartmentRow(row).status === '禁用'
-                  "
                   :type="action.type || 'primary'"
                   @click="handleRowAction(action, row)"
                 >
                   {{ action.label }}
+                </ElButton>
+                <ElButton
+                  link
+                  :type="getDepartmentStatusAction(getDepartmentRow(row)).type"
+                  @click="toggleDepartmentStatus(row)"
+                >
+                  {{ getDepartmentStatusAction(getDepartmentRow(row)).label }}
                 </ElButton>
               </ElSpace>
             </template>
@@ -1359,10 +1381,9 @@ function createExplanations(): PageExplanations {
 
 .saas-filter-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(
-      180px,
-      1fr
-    ) minmax(180px, 1fr) minmax(180px, 1fr);
+  grid-template-columns:
+    minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr)
+    minmax(180px, 1fr) minmax(180px, 1fr);
   gap: 12px 16px;
   align-items: end;
 }

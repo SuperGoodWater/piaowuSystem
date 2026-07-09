@@ -17,6 +17,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -512,17 +513,62 @@ function openAction(action: InteractionItem) {
   detailVisible.value = true;
 }
 
-function handleRowAction(action: InteractionItem, row: Record<string, any>) {
+async function handleRowAction(
+  action: InteractionItem,
+  row: Record<string, any>,
+) {
   const currentRow = getAppRow(row);
   activeAction.value = action.label;
   selectedAppId.value = currentRow.id;
   applyInteractionForm(action);
+
+  if (['上架', '下架', '停用', '启用'].includes(action.label)) {
+    await confirmAppStateAction(action.label);
+    return;
+  }
 
   if (action.label === '编辑') {
     populateInteractionForm(buildAppFormValues(currentRow));
   }
 
   detailVisible.value = true;
+}
+
+async function confirmAppStateAction(actionLabel: string) {
+  if (!selectedApp.value) {
+    ElMessage.warning('未找到当前应用，请重新选择');
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(getStateActionTip(), `${actionLabel}应用`, {
+      cancelButtonText: '取消',
+      center: true,
+      confirmButtonText: `确认${actionLabel}`,
+      type:
+        actionLabel === '启用' || actionLabel === '上架'
+          ? 'success'
+          : 'warning',
+    });
+  } catch {
+    return;
+  }
+
+  if (actionLabel === '上架') {
+    await onlineApp();
+    return;
+  }
+  if (actionLabel === '下架') {
+    await offlineApp();
+    return;
+  }
+  if (actionLabel === '启用') {
+    await enableApp();
+    return;
+  }
+  if (actionLabel === '停用') {
+    await disableApp();
+  }
 }
 
 function handleFilterSubmit() {

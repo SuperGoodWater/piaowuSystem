@@ -34,6 +34,42 @@ const routes: RouteRecordRaw[] = [
         name: 'SettingsStoreManagement',
         path: 'store-management',
       },
+      {
+        component: () => import('#/views/settings/account-management.vue'),
+        meta: {
+          description: '管理账号授权角色、门店和部门',
+          icon: 'lucide:user-cog',
+          order: 3,
+          priority: 'P1',
+          title: '账号管理',
+        },
+        name: 'SettingsAccountManagement',
+        path: 'account-management',
+      },
+      {
+        component: () => import('#/views/settings/role-management.vue'),
+        meta: {
+          description: '维护账号权限组',
+          icon: 'lucide:shield-check',
+          order: 4,
+          priority: 'P1',
+          title: '角色管理',
+        },
+        name: 'SettingsRoleManagement',
+        path: 'role-management',
+      },
+      {
+        component: () => import('#/views/settings/department-management.vue'),
+        meta: {
+          description: '维护账号部门',
+          icon: 'lucide:network',
+          order: 5,
+          priority: 'P1',
+          title: '部门管理',
+        },
+        name: 'SettingsDepartmentManagement',
+        path: 'department-management',
+      },
     ],
   },
 ];

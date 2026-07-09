@@ -9,10 +9,12 @@ import {
   ElDescriptions,
   ElDescriptionsItem,
   ElDialog,
+  ElDrawer,
   ElForm,
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -41,17 +43,16 @@ interface GroupStoreRecord {
   type: string;
 }
 
+interface StoreGroupRecord {
+  id: string;
+  name: string;
+  note: string;
+}
+
 const storeTypeOptions = [
   { label: '直营网点', value: '直营网点' },
   { label: '加盟门店', value: '加盟门店' },
   { label: '游客中心', value: '游客中心' },
-] as const;
-
-const storeGroupOptions = [
-  { label: '华东大区', value: '华东大区' },
-  { label: '华南大区', value: '华南大区' },
-  { label: '景区直营组', value: '景区直营组' },
-  { label: '城市合作组', value: '城市合作组' },
 ] as const;
 
 const fundPartyOptions = [
@@ -119,11 +120,20 @@ const storeData = ref<GroupStoreRecord[]>([
 ]);
 
 const route = useRoute();
+const addStoreVisible = ref(false);
 const currentPage = ref(1);
 const detailVisible = ref(false);
+const editingGroupId = ref('');
 const explanationVisible = ref(false);
+const groupDrawerVisible = ref(false);
 const pageSize = ref(10);
 const selectedStoreId = ref('');
+const storeGroupData = ref<StoreGroupRecord[]>([
+  { id: 'group-east', name: '华东大区', note: '华东区域门店分组' },
+  { id: 'group-south', name: '华南大区', note: '华南区域门店分组' },
+  { id: 'group-direct', name: '景区直营组', note: '景区直营网点' },
+  { id: 'group-city', name: '城市合作组', note: '城市合作门店' },
+]);
 const filterState = ref({
   fundReceiver: '',
   group: '',
@@ -139,9 +149,26 @@ const maintenanceForm = ref<
   memberOwnership: '集团',
   serviceFeePayer: '集团',
 });
+const groupForm = ref({
+  name: '',
+  note: '',
+});
+const addStoreForm = ref({
+  fundReceiver: '集团' as StoreFundParty,
+  group: '景区直营组',
+  memberOwnership: '集团' as StoreFundParty,
+  serviceFeePayer: '集团' as StoreFundParty,
+  storeId: '',
+});
 
 const pageTitle = computed(() => String(route.meta.title ?? '门店管理'));
 const pagePriority = computed(() => String(route.meta.priority ?? 'P1'));
+const storeGroupOptions = computed(() =>
+  storeGroupData.value.map((item) => ({
+    label: item.name,
+    value: item.name,
+  })),
+);
 const selectedStore = computed(
   () =>
     storeData.value.find((item) => item.id === selectedStoreId.value) ?? null,
@@ -243,6 +270,176 @@ function saveStoreMaintenance() {
   );
   ElMessage.success(`已维护门店配置：${selectedStore.value.name}`);
   detailVisible.value = false;
+}
+
+function openGroupDrawer() {
+  resetGroupForm();
+  groupDrawerVisible.value = true;
+}
+
+function resetGroupForm() {
+  editingGroupId.value = '';
+  groupForm.value = {
+    name: '',
+    note: '',
+  };
+}
+
+function getGroupRow(row: Record<string, any>): StoreGroupRecord {
+  return row as StoreGroupRecord;
+}
+
+function editGroup(row: Record<string, any>) {
+  const group = getGroupRow(row);
+  editingGroupId.value = group.id;
+  groupForm.value = {
+    name: group.name,
+    note: group.note,
+  };
+}
+
+function saveGroup() {
+  const name = groupForm.value.name.trim();
+  const note = groupForm.value.note.trim();
+
+  if (!name) {
+    ElMessage.warning('请输入分组名称');
+    return;
+  }
+
+  const duplicated = storeGroupData.value.some(
+    (item) => item.id !== editingGroupId.value && item.name === name,
+  );
+
+  if (duplicated) {
+    ElMessage.warning('分组名称已存在，请重新填写');
+    return;
+  }
+
+  if (editingGroupId.value) {
+    const oldGroup = storeGroupData.value.find(
+      (item) => item.id === editingGroupId.value,
+    );
+    storeGroupData.value = storeGroupData.value.map((item) =>
+      item.id === editingGroupId.value ? { ...item, name, note } : item,
+    );
+
+    if (oldGroup && oldGroup.name !== name) {
+      storeData.value = storeData.value.map((item) =>
+        item.group === oldGroup.name ? { ...item, group: name } : item,
+      );
+    }
+
+    ElMessage.success(`已更新分组：${name}`);
+  } else {
+    storeGroupData.value.unshift({
+      id: `group-${Date.now()}`,
+      name,
+      note,
+    });
+    ElMessage.success(`已新增分组：${name}`);
+  }
+
+  resetGroupForm();
+}
+
+async function removeGroup(row: Record<string, any>) {
+  const group = getGroupRow(row);
+  const usedCount = storeData.value.filter(
+    (item) => item.group === group.name,
+  ).length;
+
+  if (usedCount > 0) {
+    ElMessage.warning('当前分组下仍有关联门店，不能删除');
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      '删除后，该分组将不再出现在筛选和添加门店中。',
+      '删除分组',
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: '确认删除',
+        type: 'warning',
+      },
+    );
+  } catch {
+    return;
+  }
+
+  storeGroupData.value = storeGroupData.value.filter(
+    (item) => item.id !== group.id,
+  );
+  ElMessage.success(`已删除分组：${group.name}`);
+}
+
+function openAddStoreDrawer() {
+  addStoreForm.value = {
+    fundReceiver: '集团',
+    group: storeGroupOptions.value[0]?.value ?? '',
+    memberOwnership: '集团',
+    serviceFeePayer: '集团',
+    storeId: '',
+  };
+  addStoreVisible.value = true;
+}
+
+function saveAddStore() {
+  const storeId = addStoreForm.value.storeId.trim();
+
+  if (!storeId) {
+    ElMessage.warning('请输入门店编号');
+    return;
+  }
+
+  if (!addStoreForm.value.group) {
+    ElMessage.warning('请选择门店分组');
+    return;
+  }
+
+  const duplicated = storeData.value.some((item) => item.id === storeId);
+
+  if (duplicated) {
+    ElMessage.warning('该门店编号已存在于当前集团');
+    return;
+  }
+
+  storeData.value.unshift({
+    address: '待补充门店地址',
+    adminPhone: '待补充',
+    fundReceiver: addStoreForm.value.fundReceiver,
+    group: addStoreForm.value.group,
+    id: storeId,
+    memberOwnership: addStoreForm.value.memberOwnership,
+    name: `门店 ${storeId}`,
+    serviceFeePayer: addStoreForm.value.serviceFeePayer,
+    type: '直营网点',
+  });
+  currentPage.value = 1;
+  addStoreVisible.value = false;
+  ElMessage.success(`已添加门店：${storeId}`);
+}
+
+async function removeStore(row: GroupStoreRecord) {
+  try {
+    await ElMessageBox.confirm(
+      `确认将 ${row.name} 从当前集团门店管理中移除吗？移除后不再出现在当前列表。`,
+      '移除门店',
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: '确认移除',
+        type: 'warning',
+      },
+    );
+  } catch {
+    return;
+  }
+
+  storeData.value = storeData.value.filter((item) => item.id !== row.id);
+  ElMessage.success(`已移除门店：${row.name}`);
 }
 
 function handlePageSizeChange(size: number) {
@@ -363,6 +560,12 @@ function handleCurrentPageChange(page: number) {
             </ElFormItem>
 
             <div class="saas-filter-actions">
+              <ElButton type="primary" plain @click="openGroupDrawer">
+                分组管理
+              </ElButton>
+              <ElButton type="primary" plain @click="openAddStoreDrawer">
+                添加门店
+              </ElButton>
               <ElButton type="primary" native-type="submit">查询</ElButton>
               <ElButton @click="handleFilterReset">重置</ElButton>
             </div>
@@ -395,7 +598,7 @@ function handleCurrentPageChange(page: number) {
             </template>
           </ElTable.TableColumn>
 
-          <ElTable.TableColumn label="操作" fixed="right" min-width="100">
+          <ElTable.TableColumn label="操作" fixed="right" min-width="160">
             <template #default="{ row }">
               <ElSpace wrap>
                 <ElButton
@@ -404,6 +607,13 @@ function handleCurrentPageChange(page: number) {
                   @click="openStoreMaintenance(getStoreRow(row))"
                 >
                   维护
+                </ElButton>
+                <ElButton
+                  link
+                  type="danger"
+                  @click="removeStore(getStoreRow(row))"
+                >
+                  移除门店
                 </ElButton>
               </ElSpace>
             </template>
@@ -458,7 +668,7 @@ function handleCurrentPageChange(page: number) {
       </template>
     </ElDialog>
 
-    <ElDialog v-model="detailVisible" title="维护门店" width="760px">
+    <ElDrawer v-model="detailVisible" size="520px" title="维护门店">
       <ElDescriptions v-if="selectedStore" :column="2" border>
         <ElDescriptionsItem label="门店ID">
           {{ selectedStore.id }}
@@ -526,7 +736,123 @@ function handleCurrentPageChange(page: number) {
         <ElButton @click="detailVisible = false">取消</ElButton>
         <ElButton type="primary" @click="saveStoreMaintenance">保存</ElButton>
       </template>
-    </ElDialog>
+    </ElDrawer>
+
+    <ElDrawer v-model="groupDrawerVisible" size="560px" title="分组管理">
+      <div class="flex flex-col gap-4">
+        <ElForm :model="groupForm" label-position="top">
+          <div class="saas-maintenance-grid">
+            <ElFormItem label="分组名称">
+              <ElInput
+                v-model="groupForm.name"
+                clearable
+                placeholder="请输入分组名称"
+              />
+            </ElFormItem>
+            <ElFormItem label="分组说明">
+              <ElInput
+                v-model="groupForm.note"
+                clearable
+                placeholder="请输入分组说明"
+              />
+            </ElFormItem>
+          </div>
+          <div class="mt-1 flex justify-end gap-2">
+            <ElButton @click="resetGroupForm">重置</ElButton>
+            <ElButton type="primary" @click="saveGroup">
+              {{ editingGroupId ? '保存分组' : '新增分组' }}
+            </ElButton>
+          </div>
+        </ElForm>
+
+        <ElTable :data="storeGroupData" size="small" stripe>
+          <ElTable.TableColumn label="分组名称" prop="name" min-width="140" />
+          <ElTable.TableColumn label="分组说明" prop="note" min-width="180" />
+          <ElTable.TableColumn label="门店数" min-width="90">
+            <template #default="{ row }">
+              {{ storeData.filter((item) => item.group === row.name).length }}
+            </template>
+          </ElTable.TableColumn>
+          <ElTable.TableColumn label="操作" fixed="right" min-width="120">
+            <template #default="{ row }">
+              <ElSpace wrap>
+                <ElButton link type="primary" @click="editGroup(row)">
+                  编辑
+                </ElButton>
+                <ElButton link type="danger" @click="removeGroup(row)">
+                  删除
+                </ElButton>
+              </ElSpace>
+            </template>
+          </ElTable.TableColumn>
+        </ElTable>
+      </div>
+
+      <template #footer>
+        <ElButton @click="groupDrawerVisible = false">关闭</ElButton>
+      </template>
+    </ElDrawer>
+
+    <ElDrawer v-model="addStoreVisible" size="520px" title="添加门店">
+      <ElForm :model="addStoreForm" label-position="top">
+        <ElFormItem label="门店编号">
+          <ElInput
+            v-model="addStoreForm.storeId"
+            clearable
+            placeholder="请输入要添加的门店编号"
+          />
+        </ElFormItem>
+
+        <ElFormItem label="门店分组">
+          <ElSelect v-model="addStoreForm.group" filterable>
+            <ElOption
+              v-for="option in storeGroupOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </ElSelect>
+        </ElFormItem>
+
+        <div class="saas-maintenance-grid">
+          <ElFormItem label="资金入账方">
+            <ElSelect v-model="addStoreForm.fundReceiver">
+              <ElOption
+                v-for="option in fundPartyOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </ElSelect>
+          </ElFormItem>
+          <ElFormItem label="服务费承担方">
+            <ElSelect v-model="addStoreForm.serviceFeePayer">
+              <ElOption
+                v-for="option in fundPartyOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </ElSelect>
+          </ElFormItem>
+          <ElFormItem label="会员体系归属">
+            <ElSelect v-model="addStoreForm.memberOwnership">
+              <ElOption
+                v-for="option in fundPartyOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </ElSelect>
+          </ElFormItem>
+        </div>
+      </ElForm>
+
+      <template #footer>
+        <ElButton @click="addStoreVisible = false">取消</ElButton>
+        <ElButton type="primary" @click="saveAddStore">添加</ElButton>
+      </template>
+    </ElDrawer>
   </Page>
 </template>
 

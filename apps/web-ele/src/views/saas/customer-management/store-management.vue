@@ -20,12 +20,15 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
   ElSpace,
   ElSwitch,
   ElTable,
+  ElTabPane,
+  ElTabs,
   ElTag,
 } from 'element-plus';
 
@@ -191,6 +194,7 @@ type PageExplanations = Pick<
 type InteractionItem = SaaSActionItem;
 type FormFieldItem = SaaSFieldItem;
 type StoreAppAuthorizationStatus = '已关闭' | '已到期' | '生效中';
+type AuthorizationRecordType = '应用开通' | '授权续费' | '权益购买';
 
 interface StoreAppAuthorizationRecord {
   appId: string;
@@ -200,6 +204,17 @@ interface StoreAppAuthorizationRecord {
   price: string;
   startAt: string;
   status: StoreAppAuthorizationStatus;
+  storeId: string;
+}
+
+interface AuthorizationRecord {
+  amount: string;
+  createdAt: string;
+  id: string;
+  itemName: string;
+  note: string;
+  operator: string;
+  recordType: AuthorizationRecordType;
   storeId: string;
 }
 
@@ -223,6 +238,7 @@ const paymentChannelVisible = ref(false);
 const paymentFeeVisible = ref(false);
 const appAuthorizationDialogVisible = ref(false);
 const activeAppAuthorizationAction = ref<'开通应用' | '续期授权'>('开通应用');
+const authorizationActiveTab = ref('overview');
 const maintenanceVersion = ref('');
 const selectedAppAuthorizationId = ref('');
 const selectedStoreId = ref('');
@@ -325,6 +341,58 @@ const appAuthorizationData = ref<StoreAppAuthorizationRecord[]>([
     storeId: 'store-003',
   },
 ]);
+const authorizationRecordData = ref<AuthorizationRecord[]>([
+  {
+    amount: '3998 元',
+    createdAt: '2026-07-04 16:20',
+    id: 'consume-store-001-renew',
+    itemName: '旗舰版授权续费',
+    note: '门店整体授权续费至 2027-06-30',
+    operator: '平台运营',
+    recordType: '授权续费',
+    storeId: 'store-001',
+  },
+  {
+    amount: '199 元/月',
+    createdAt: '2026-07-04 16:25',
+    id: 'consume-store-001-app-member',
+    itemName: '会员营销中心',
+    note: '开通应用授权',
+    operator: '平台运营',
+    recordType: '应用开通',
+    storeId: 'store-001',
+  },
+  {
+    amount: '299 元/月',
+    createdAt: '2026-07-04 16:30',
+    id: 'consume-store-001-app-analytics',
+    itemName: '经营分析看板',
+    note: '开通应用授权',
+    operator: '平台运营',
+    recordType: '应用开通',
+    storeId: 'store-001',
+  },
+  {
+    amount: '99 元/月',
+    createdAt: '2026-07-02 15:20',
+    id: 'consume-store-002-app-inspection',
+    itemName: '门店巡检台',
+    note: '开通应用授权，当前已到期',
+    operator: '平台运营',
+    recordType: '应用开通',
+    storeId: 'store-002',
+  },
+  {
+    amount: '1200 元',
+    createdAt: '2026-07-03 10:05',
+    id: 'consume-store-003-benefit',
+    itemName: '专业版权益包',
+    note: '购买门店经营权益包',
+    operator: '平台运营',
+    recordType: '权益购买',
+    storeId: 'store-003',
+  },
+]);
 
 const pageTitle = computed(() => String(route.meta.title ?? '门店管理'));
 const pagePriority = computed(() => String(route.meta.priority ?? 'P0'));
@@ -350,7 +418,7 @@ const activeInteraction = computed(() => {
 const isCreateMode = computed(() => activeAction.value === '新建门店');
 const isDelayMode = computed(() => activeAction.value === '延期');
 const isBasicInfoMode = computed(() => activeAction.value === '基础信息');
-const isAuthorizationMode = computed(() => activeAction.value === '功能授权');
+const isAuthorizationMode = computed(() => activeAction.value === '授权管理');
 const isPaymentMode = computed(() => activeAction.value === '支付配置');
 const isMaintenanceMode = computed(
   () =>
@@ -409,6 +477,15 @@ const selectedStoreAppAuthorizations = computed(() => {
   }
 
   return appAuthorizationData.value.filter(
+    (item) => item.storeId === selectedStore.value?.id,
+  );
+});
+const selectedStoreAuthorizationRecords = computed(() => {
+  if (!selectedStore.value) {
+    return [];
+  }
+
+  return authorizationRecordData.value.filter(
     (item) => item.storeId === selectedStore.value?.id,
   );
 });
@@ -689,6 +766,7 @@ function openAction(action: InteractionItem, row?: StoreRecord) {
   activeAction.value = action.label;
   selectedStoreId.value = row?.id ?? '';
   maintenanceVersion.value = row?.version ?? '';
+  authorizationActiveTab.value = 'overview';
   applyInteractionForm(action);
 
   if (action.label === '延期' && row) {
@@ -983,13 +1061,28 @@ function saveMaintenanceVersion() {
   );
 }
 
-function toggleMaintenanceStatus() {
+async function toggleMaintenanceStatus() {
   if (!selectedStore.value) {
     ElMessage.warning('未找到当前门店，请重新选择');
     return;
   }
 
   const targetStatus = selectedStore.value.status === '启用' ? '停用' : '启用';
+
+  try {
+    await ElMessageBox.confirm(
+      getMaintenanceStatusTip(selectedStore.value.status),
+      `${targetStatus}门店`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${targetStatus}`,
+        type: targetStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
+    return;
+  }
 
   updateStoreRecord(selectedStore.value.id, {
     status: targetStatus,
@@ -1165,7 +1258,7 @@ function createInteractions(): PageInteractions {
     rowActions: [
       {
         label: '基础信息',
-        description: '维护门店基础信息、功能授权、版本和支付信息。',
+        description: '维护门店基础信息、授权、版本和支付信息。',
         goal: '查看门店资料、切换门店版本，并处理门店启停状态。',
         permissionPoints: ['查看', '切换版本'],
         processSteps: [
@@ -1175,13 +1268,15 @@ function createInteractions(): PageInteractions {
         ],
       },
       {
-        label: '功能授权',
-        description: '查看门店授权版本、应用授权、授权到期时间和当前功能。',
-        goal: '确认门店版本能力、应用授权和有效期。',
+        label: '授权管理',
+        description:
+          '查看门店授权版本、应用授权、授权到期时间、当前功能和授权记录。',
+        goal: '确认门店版本能力、应用授权、授权记录和有效期。',
         permissionPoints: ['查看', '开通应用', '续期授权', '关闭授权', '延期'],
         processSteps: [
-          '从列表点击“功能授权”。',
+          '从列表点击“授权管理”。',
           '查看授权版本、授权状态、版本基础功能和门店应用授权。',
+          '切换到“授权记录”子页面查看授权续费、权益购买和应用开通记录。',
           '按需开通应用、续期授权或关闭应用授权。',
           '如需延长门店整体授权有效期，点击“延期”。',
         ],
@@ -1237,7 +1332,7 @@ function createExplanations(): PageExplanations {
     documentNotes: [
       '门店类型创建成功后不可修改。',
       '版本切换后，能力边界会立即按新版本生效。',
-      '应用授权归属于具体门店，可在功能授权中完成开通、续期和关闭。',
+      '应用授权归属于具体门店，可在授权管理中完成开通、续期和关闭。',
       '停用门店后，门店业务能力将暂停使用；重新启用后可继续使用。',
       '延期时新的授权到期日必须晚于当前授权到期日。',
     ],
@@ -1272,8 +1367,9 @@ function createExplanations(): PageExplanations {
     ],
     processSteps: [
       '通过门店名称、所属租户、门店类型和状态筛选目标门店。',
-      '从列表操作栏进入基础信息、功能授权、支付信息或延期动作。',
-      '在功能授权中完成版本切换、门店应用授权开通、续期、关闭和延期。',
+      '从列表操作栏进入基础信息、授权管理、支付信息或延期动作。',
+      '在授权管理中完成版本切换、门店应用授权开通、续期、关闭和延期。',
+      '在授权管理 / 授权记录中查看授权续费、权益购买和应用开通流水。',
       '在对应抽屉中完成停用或启用。',
       '提交后即时刷新门店状态与版本信息。',
     ],
@@ -1420,9 +1516,9 @@ function createExplanations(): PageExplanations {
             </template>
           </ElTable.TableColumn>
 
-          <ElTable.TableColumn label="操作" fixed="right" min-width="150">
+          <ElTable.TableColumn label="操作" fixed="right" min-width="380">
             <template #default="{ row }">
-              <ElSpace wrap>
+              <ElSpace class="operation-space">
                 <ElButton
                   v-for="action in interactions.rowActions"
                   :key="action.label"
@@ -1689,140 +1785,221 @@ function createExplanations(): PageExplanations {
         </div>
 
         <div v-else-if="isAuthorizationMode" class="flex flex-col gap-4">
-          <ElDescriptions :column="1" border>
-            <ElDescriptionsItem label="授权版本">
-              {{ selectedStore.version }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="授权到期">
-              {{ selectedStore.authorizationExpireAt }}
-            </ElDescriptionsItem>
-            <ElDescriptionsItem label="授权状态">
-              <ElTag :type="getStatusTagType(selectedStore.status)">
-                {{ selectedStore.status }}
-              </ElTag>
-            </ElDescriptionsItem>
-          </ElDescriptions>
+          <ElTabs v-model="authorizationActiveTab">
+            <ElTabPane label="授权概览" name="overview">
+              <div class="flex flex-col gap-4">
+                <ElDescriptions :column="1" border>
+                  <ElDescriptionsItem label="授权版本">
+                    {{ selectedStore.version }}
+                  </ElDescriptionsItem>
+                  <ElDescriptionsItem label="授权到期">
+                    {{ selectedStore.authorizationExpireAt }}
+                  </ElDescriptionsItem>
+                  <ElDescriptionsItem label="授权状态">
+                    <ElTag :type="getStatusTagType(selectedStore.status)">
+                      {{ selectedStore.status }}
+                    </ElTag>
+                  </ElDescriptionsItem>
+                </ElDescriptions>
 
-          <div class="drawer-section-card">
-            <div class="text-sm font-medium">切换版本</div>
-            <div class="mt-3 flex flex-wrap items-center gap-3">
-              <ElSelect
-                v-model="maintenanceVersion"
-                class="maintenance-version-select"
-                placeholder="请选择目标版本"
-              >
-                <ElOption label="基础版" value="基础版" />
-                <ElOption label="专业版" value="专业版" />
-                <ElOption label="旗舰版" value="旗舰版" />
-              </ElSelect>
-              <ElButton type="primary" @click="saveMaintenanceVersion">
-                保存版本
-              </ElButton>
-            </div>
-            <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
-              版本切换后，功能授权会按新版本能力边界立即更新。
-            </div>
-          </div>
+                <div class="drawer-section-card">
+                  <div class="text-sm font-medium">切换版本</div>
+                  <div class="mt-3 flex flex-wrap items-center gap-3">
+                    <ElSelect
+                      v-model="maintenanceVersion"
+                      class="maintenance-version-select"
+                      placeholder="请选择目标版本"
+                    >
+                      <ElOption label="基础版" value="基础版" />
+                      <ElOption label="专业版" value="专业版" />
+                      <ElOption label="旗舰版" value="旗舰版" />
+                    </ElSelect>
+                    <ElButton type="primary" @click="saveMaintenanceVersion">
+                      保存版本
+                    </ElButton>
+                  </div>
+                  <div
+                    class="mt-2 text-sm text-[var(--el-text-color-secondary)]"
+                  >
+                    版本切换后，授权管理会按新版本能力边界立即更新。
+                  </div>
+                </div>
 
-          <div class="drawer-section-card">
-            <div class="text-sm font-medium">授权延期</div>
-            <div class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
-              延期会更新门店授权到期日；若当前门店已过期，延期成功后会恢复启用。
-            </div>
-            <div class="mt-3">
-              <ElButton
-                type="success"
-                @click="openStoreDelayAction(selectedStore)"
-              >
-                延期
-              </ElButton>
-            </div>
-          </div>
+                <div class="drawer-section-card">
+                  <div class="text-sm font-medium">授权延期</div>
+                  <div
+                    class="mt-2 text-sm text-[var(--el-text-color-secondary)]"
+                  >
+                    延期会更新门店授权到期日；若当前门店已过期，延期成功后会恢复启用。
+                  </div>
+                  <div class="mt-3">
+                    <ElButton
+                      type="success"
+                      @click="openStoreDelayAction(selectedStore)"
+                    >
+                      延期
+                    </ElButton>
+                  </div>
+                </div>
 
-          <div class="drawer-section-card">
-            <div class="text-sm font-medium">版本基础功能</div>
-            <ul
-              class="mt-2 list-disc pl-5 text-sm leading-7 text-[var(--el-text-color-primary)]"
-            >
-              <li v-for="feature in maintenanceFeatureItems" :key="feature">
-                {{ feature }}
-              </li>
-            </ul>
-          </div>
+                <div class="drawer-section-card">
+                  <div class="text-sm font-medium">版本基础功能</div>
+                  <ul
+                    class="mt-2 list-disc pl-5 text-sm leading-7 text-[var(--el-text-color-primary)]"
+                  >
+                    <li
+                      v-for="feature in maintenanceFeatureItems"
+                      :key="feature"
+                    >
+                      {{ feature }}
+                    </li>
+                  </ul>
+                </div>
 
-          <div class="drawer-section-card">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div class="text-sm font-medium">门店应用授权</div>
-                <div class="mt-1 text-sm text-[var(--el-text-color-secondary)]">
-                  维护当前门店已开通应用、授权有效期和使用状态。
+                <div class="drawer-section-card">
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div class="text-sm font-medium">门店应用授权</div>
+                      <div
+                        class="mt-1 text-sm text-[var(--el-text-color-secondary)]"
+                      >
+                        维护当前门店已开通应用、授权有效期和使用状态。
+                      </div>
+                    </div>
+                    <ElButton
+                      type="primary"
+                      @click="openCreateAppAuthorizationDialog"
+                    >
+                      开通应用
+                    </ElButton>
+                  </div>
+
+                  <ElTable
+                    class="mt-3"
+                    :data="selectedStoreAppAuthorizations"
+                    size="small"
+                    stripe
+                  >
+                    <ElTable.TableColumn
+                      label="应用ID"
+                      prop="appId"
+                      min-width="150"
+                    />
+                    <ElTable.TableColumn
+                      label="应用名称"
+                      prop="appName"
+                      min-width="150"
+                    />
+                    <ElTable.TableColumn
+                      label="价格"
+                      prop="price"
+                      min-width="110"
+                    />
+                    <ElTable.TableColumn
+                      label="开始时间"
+                      prop="startAt"
+                      min-width="120"
+                    />
+                    <ElTable.TableColumn
+                      label="到期时间"
+                      prop="endAt"
+                      min-width="120"
+                    />
+                    <ElTable.TableColumn label="状态" min-width="100">
+                      <template #default="{ row }">
+                        <ElTag
+                          :type="getAppAuthorizationStatusTagType(row.status)"
+                        >
+                          {{ row.status }}
+                        </ElTag>
+                      </template>
+                    </ElTable.TableColumn>
+                    <ElTable.TableColumn
+                      label="操作"
+                      fixed="right"
+                      min-width="130"
+                    >
+                      <template #default="{ row }">
+                        <ElSpace class="operation-space">
+                          <ElButton
+                            link
+                            type="success"
+                            @click="openRenewAppAuthorizationDialog(row)"
+                          >
+                            续期
+                          </ElButton>
+                          <ElButton
+                            v-if="row.status !== '已关闭'"
+                            link
+                            type="danger"
+                            @click="closeAppAuthorization(row)"
+                          >
+                            关闭
+                          </ElButton>
+                        </ElSpace>
+                      </template>
+                    </ElTable.TableColumn>
+                  </ElTable>
                 </div>
               </div>
-              <ElButton
-                type="primary"
-                @click="openCreateAppAuthorizationDialog"
-              >
-                开通应用
-              </ElButton>
-            </div>
+            </ElTabPane>
 
-            <ElTable
-              class="mt-3"
-              :data="selectedStoreAppAuthorizations"
-              size="small"
-              stripe
-            >
-              <ElTable.TableColumn
-                label="应用ID"
-                prop="appId"
-                min-width="150"
-              />
-              <ElTable.TableColumn
-                label="应用名称"
-                prop="appName"
-                min-width="150"
-              />
-              <ElTable.TableColumn label="价格" prop="price" min-width="110" />
-              <ElTable.TableColumn
-                label="开始时间"
-                prop="startAt"
-                min-width="120"
-              />
-              <ElTable.TableColumn
-                label="到期时间"
-                prop="endAt"
-                min-width="120"
-              />
-              <ElTable.TableColumn label="状态" min-width="100">
-                <template #default="{ row }">
-                  <ElTag :type="getAppAuthorizationStatusTagType(row.status)">
-                    {{ row.status }}
-                  </ElTag>
-                </template>
-              </ElTable.TableColumn>
-              <ElTable.TableColumn label="操作" fixed="right" min-width="130">
-                <template #default="{ row }">
-                  <ElSpace wrap>
-                    <ElButton
-                      link
-                      type="success"
-                      @click="openRenewAppAuthorizationDialog(row)"
+            <ElTabPane label="授权记录" name="records">
+              <div class="drawer-section-card">
+                <div class="text-sm font-medium">授权记录</div>
+                <div class="mt-1 text-sm text-[var(--el-text-color-secondary)]">
+                  展示该门店的授权续费、权益购买和应用开通记录。
+                </div>
+              </div>
+
+              <ElTable
+                class="mt-3"
+                :data="selectedStoreAuthorizationRecords"
+                empty-text="暂无授权记录"
+                size="small"
+                stripe
+              >
+                <ElTable.TableColumn label="记录类型" min-width="110">
+                  <template #default="{ row }">
+                    <ElTag
+                      :type="
+                        row.recordType === '授权续费'
+                          ? 'success'
+                          : row.recordType === '权益购买'
+                            ? 'warning'
+                            : 'primary'
+                      "
                     >
-                      续期
-                    </ElButton>
-                    <ElButton
-                      v-if="row.status !== '已关闭'"
-                      link
-                      type="danger"
-                      @click="closeAppAuthorization(row)"
-                    >
-                      关闭
-                    </ElButton>
-                  </ElSpace>
-                </template>
-              </ElTable.TableColumn>
-            </ElTable>
-          </div>
+                      {{ row.recordType }}
+                    </ElTag>
+                  </template>
+                </ElTable.TableColumn>
+                <ElTable.TableColumn
+                  label="关联项目"
+                  prop="itemName"
+                  min-width="150"
+                />
+                <ElTable.TableColumn
+                  label="金额"
+                  prop="amount"
+                  min-width="110"
+                />
+                <ElTable.TableColumn
+                  label="发生时间"
+                  prop="createdAt"
+                  min-width="150"
+                />
+                <ElTable.TableColumn
+                  label="操作人"
+                  prop="operator"
+                  min-width="110"
+                />
+                <ElTable.TableColumn label="说明" prop="note" min-width="220" />
+              </ElTable>
+            </ElTabPane>
+          </ElTabs>
         </div>
 
         <div v-else-if="isPaymentMode" class="flex flex-col gap-4">
@@ -2255,6 +2432,15 @@ function createExplanations(): PageExplanations {
 }
 
 .saas-filter-actions :deep(.el-button) {
+  margin-left: 0;
+}
+
+.operation-space {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.operation-space :deep(.el-button) {
   margin-left: 0;
 }
 

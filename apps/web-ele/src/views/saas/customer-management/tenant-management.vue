@@ -17,6 +17,7 @@ import {
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
@@ -568,7 +569,7 @@ function resetMaintenancePassword() {
   maintenancePassword.value = '';
 }
 
-function toggleMaintenanceStatus() {
+async function toggleMaintenanceStatus() {
   if (!selectedTenant.value) {
     ElMessage.warning('未找到当前租户，请重新选择');
     return;
@@ -576,6 +577,21 @@ function toggleMaintenanceStatus() {
 
   const nextStatus: TenantStatus =
     selectedTenant.value.status === '停用' ? '启用' : '停用';
+
+  try {
+    await ElMessageBox.confirm(
+      getMaintenanceStatusTip(selectedTenant.value.status),
+      `${nextStatus}租户`,
+      {
+        cancelButtonText: '取消',
+        center: true,
+        confirmButtonText: `确认${nextStatus}`,
+        type: nextStatus === '启用' ? 'success' : 'warning',
+      },
+    );
+  } catch {
+    return;
+  }
 
   updateTenantRecord(selectedTenant.value.id, {
     status: nextStatus,
@@ -741,7 +757,7 @@ function createExplanations(): PageExplanations {
     exceptions: [
       '租户名称、管理员账号或手机号重复时，不允许创建。',
       '重置密码时，两次输入的新密码不一致则不能提交。',
-      '已停用租户不允许重复执行停用动作。',
+      '租户停用和启用动作互斥展示。',
     ],
     fields: [
       {
@@ -763,7 +779,7 @@ function createExplanations(): PageExplanations {
     processSteps: [
       '通过关键词或状态筛选需要处理的租户。',
       '从列表进入新建或维护动作。',
-      '在维护抽屉中查看详情、重置密码，并处理租户停用或启用。',
+      '在维护抽屉中查看详情、重置密码，停用或启用使用居中确认弹窗。',
       '提交后即时刷新当前列表数据与状态。',
     ],
     statusTransitions: [
